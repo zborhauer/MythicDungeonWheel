@@ -7,8 +7,12 @@ local addonName, addon = ...
 MythicDungeonWheel = CreateFrame("Frame")
 local MDW = MythicDungeonWheel
 
--- Initialize interface mode
-MDW.interfaceMode = "wheel" -- Always use wheel mode with scrolling animation
+-- Debug print helper function
+function MDW:DebugPrint(message)
+    if self.debugMode then
+        print(message)
+    end
+end
 
 -- Initialize scrolling animation state
 MDW.scrollingAnimation = {
@@ -16,117 +20,21 @@ MDW.scrollingAnimation = {
     selectedKeystone = nil
 }
 
--- Dungeon loading screen textures for Season 3 (using texture file IDs)
-MDW.dungeonTextures = {
-    -- The War Within Dungeons (using numeric file IDs that should work)
-    ["Ara-Kara, City of Echoes"] = 5912204, -- Ara-Kara loading screen
-    ["The Dawnbreaker"] = 5912205, -- Dawnbreaker loading screen
-    ["Priory of the Sacred Flame"] = 5912206, -- Priory loading screen
-    ["Operation: Floodgate"] = 5912207, -- Floodgate loading screen
-    ["Eco-Dome Al'dani"] = 5912208, -- EcoDome loading screen
-    
-    -- Shadowlands Dungeons
-    ["Halls of Atonement"] = 3675918, -- Halls loading screen
-    ["Tazavesh: Streets of Wonder"] = 4226237, -- Tazavesh loading screen
-    ["Tazavesh: So'leah's Gambit"] = 4226237, -- Same as Streets
-    
-    -- Alternative: Use known working WoW textures for War Within zones
-    ["ara-kara-alt"] = "Interface\\WorldMap\\UI-WorldMap-Middle", -- Generic map texture
-    ["dawnbreaker-alt"] = "Interface\\Glues\\LoadingScreens\\LoadingScreen_NeutralPandaren",
-    
-    -- Use actual spell/ability icons that we know exist
-    ["spell-ara"] = 136235, -- Spell icon that exists
-    ["spell-dawn"] = 136236,
-    ["spell-priory"] = 136237,
-    ["spell-flood"] = 136238,
-    ["spell-eco"] = 136239,
-    ["spell-halls"] = 136240,
-    ["spell-taza"] = 136241,
-    
-    -- Simple colored backgrounds as absolute fallback
-    ["color-blue"] = nil, -- Will be handled specially
-    ["color-green"] = nil,
-    ["color-purple"] = nil,
-    ["color-orange"] = nil,
-    ["color-red"] = nil,
-    
-    -- Fallback that definitely exists
-    ["default"] = "Interface\\Buttons\\UI-Quickslot-Depress"
-}
-
--- Helper function to get dungeon texture with fallbacks
-function MDW:GetDungeonTexture(dungeonName)
-    if not dungeonName then
-        print("MDW Debug: No dungeon name provided, using default texture")
-        return self.dungeonTextures["default"]
-    end
-    
-    print("MDW Debug: Looking up texture for dungeon: '" .. dungeonName .. "'")
-    
-    -- Try exact match first
-    local texture = self.dungeonTextures[dungeonName]
-    if texture then
-        print("MDW Debug: Found exact match texture: " .. tostring(texture))
-        return texture
-    end
-    
-    -- Try lowercase partial matches with priority order
-    local lowerName = string.lower(dungeonName)
-    
-    -- Try numeric texture IDs first
-    if string.find(lowerName, "ara-kara") then
-        return self.dungeonTextures["Ara-Kara, City of Echoes"]
-    elseif string.find(lowerName, "dawnbreaker") then
-        return self.dungeonTextures["The Dawnbreaker"]
-    elseif string.find(lowerName, "priory") then
-        return self.dungeonTextures["Priory of the Sacred Flame"]
-    elseif string.find(lowerName, "floodgate") then
-        return self.dungeonTextures["Operation: Floodgate"]
-    elseif string.find(lowerName, "eco-dome") or string.find(lowerName, "al'dani") then
-        return self.dungeonTextures["Eco-Dome Al'dani"]
-    elseif string.find(lowerName, "halls") then
-        return self.dungeonTextures["Halls of Atonement"]
-    elseif string.find(lowerName, "tazavesh") then
-        return self.dungeonTextures["Tazavesh: Streets of Wonder"]
-    end
-    
-    -- Try spell icons as backup
-    if string.find(lowerName, "ara-kara") then
-        return self.dungeonTextures["spell-ara"]
-    elseif string.find(lowerName, "dawnbreaker") then
-        return self.dungeonTextures["spell-dawn"]
-    elseif string.find(lowerName, "priory") then
-        return self.dungeonTextures["spell-priory"]
-    elseif string.find(lowerName, "floodgate") then
-        return self.dungeonTextures["spell-flood"]
-    elseif string.find(lowerName, "eco-dome") or string.find(lowerName, "al'dani") then
-        return self.dungeonTextures["spell-eco"]
-    elseif string.find(lowerName, "halls") then
-        return self.dungeonTextures["spell-halls"]
-    elseif string.find(lowerName, "tazavesh") then
-        return self.dungeonTextures["spell-taza"]
-    end
-    
-    -- Debug: Print the dungeon name so we can see what's not matching
-    print("MDW Debug: Unknown dungeon texture for: " .. tostring(dungeonName))
-    
-    -- Fallback to default
-    return self.dungeonTextures["default"]
-end
-
--- Helper function to create colored background for dungeons
-function MDW:CreateColoredBackground(texture, r, g, b)
-    if texture then
-        texture:SetColorTexture(r or 0.2, g or 0.3, b or 0.8, 1.0)
-        return true
-    end
-    return false
-end
-
 -- Constants
 local COMM_PREFIX = "MDW"
-local KEYSTONE_ITEM_ID = 180653 -- Mythic Keystone item ID (Dragonflight)
+local KEYSTONE_ITEM_ID = 180653 -- Mythic Keystone item ID (should work across expansions)
 local KEYSTONE_ITEM_NAME = "Mythic Keystone" -- For fallback detection
+
+-- Utility function for string trimming
+local function trim(s)
+    if not s then return "" end
+    return s:match("^%s*(.-)%s*$")
+end
+
+-- Make trim available as a string method
+if not string.trim then
+    string.trim = trim
+end
 
 -- Session data
 MDW.session = {
@@ -135,14 +43,25 @@ MDW.session = {
     participants = {},
     keystones = {},
     selectedKeystone = nil,
-    isOwner = false  -- Whether this player owns the session
+    isOwner = false,  -- Whether this player owns the session
+    selectedKeystoneRemoved = false,
+    autoResetTimer = nil, -- Timer for auto-reset after voting
+    voting = {
+        active = false,
+        votes = {}, -- {playerName = true/false}
+        voteCount = 0, -- number of yes votes
+        totalVotes = 0, -- total votes cast
+        totalMembers = 0, -- total members in group
+        timeLeft = 30,
+        timer = nil
+    }
 }
 
 -- Test mode for development
 MDW.testMode = false
 
 -- Developer mode (enables test button visibility)
-MDW.devMode = false
+MDW.debugMode = false
 
 -- Event registration and initialization
 function MDW:OnEvent(event, ...)
@@ -186,13 +105,12 @@ function MDW:CreateMinimapButton()
         OnTooltipShow = function(tooltip)
             tooltip:AddLine("Mythic Dungeon Wheel")
             tooltip:AddLine("|cffeda55fClick|r to open interface")
-            tooltip:AddLine("|cffeda55fUse /mdw test|r to enable test mode")
         end,
     })
     
     -- Register the minimap button
     LDBIcon:Register("MythicDungeonWheel", minimapButton, MythicDungeonWheelDB)
-    print("|cff00ff00MythicDungeonWheel:|r Minimap button created successfully!")
+    self:DebugPrint("|cff00ff00MythicDungeonWheel:|r Minimap button created successfully!")
 end
 
 function MDW:CreateFallbackMinimapButton()
@@ -227,7 +145,6 @@ function MDW:CreateFallbackMinimapButton()
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
         GameTooltip:AddLine("Mythic Dungeon Wheel")
         GameTooltip:AddLine("|cffeda55fClick|r to open interface")
-        GameTooltip:AddLine("|cffeda55fUse /mdw test|r to enable test mode")
         GameTooltip:AddLine("|cffff9999Note:|r Install LibDBIcon for draggable button")
         GameTooltip:Show()
     end)
@@ -239,7 +156,7 @@ function MDW:CreateFallbackMinimapButton()
     -- Store reference
     self.minimapButton = button
     
-    print("|cffffff00MythicDungeonWheel:|r Simple minimap button created (question mark icon).")
+    self:DebugPrint("|cffffff00MythicDungeonWheel:|r Simple minimap button created (question mark icon).")
 end
 
 function MDW:Initialize()
@@ -251,6 +168,24 @@ function MDW:Initialize()
     -- Set default minimap button position if not set
     if not MythicDungeonWheelDB.minimapAngle then
         MythicDungeonWheelDB.minimapAngle = 45
+    end
+    
+    -- Initialize wheel statistics
+    if not MythicDungeonWheelDB.statistics then
+        MythicDungeonWheelDB.statistics = {
+            completedKeys = {},
+            totalCompleted = 0,
+            yesVotes = 0,
+            noVotes = 0
+        }
+    end
+    
+    -- Add voting statistics if they don't exist (for existing users)
+    if MythicDungeonWheelDB.statistics.yesVotes == nil then
+        MythicDungeonWheelDB.statistics.yesVotes = 0
+    end
+    if MythicDungeonWheelDB.statistics.noVotes == nil then
+        MythicDungeonWheelDB.statistics.noVotes = 0
     end
     
     -- Create minimap button
@@ -268,97 +203,214 @@ function MDW:Initialize()
     
     -- Create slash commands
     SLASH_MDW1 = "/mdw"
-    SLASH_MDW2 = "/mythicwheel"
     SlashCmdList["MDW"] = function(msg) self:SlashHandler(msg) end
     
-    print("|cff00ff00MythicDungeonWheel|r loaded! Use /mdw to open interface or /mdw test to enable test mode.")
+    -- Set initial window height (compact since voting is not active)
+    C_Timer.After(0.1, function() self:AdjustWindowHeight() end)
+    
+    self:DebugPrint("|cff00ff00MythicDungeonWheel|r loaded! Use /mdw to open interface or /mdw help for commands.")
 end
 
 -- Slash command handler
 function MDW:SlashHandler(msg)
-    local command = string.lower(string.trim(msg))
+    local trimmedMsg = string.trim(msg)
+    local command, remainder = trimmedMsg:match("^(%S+)%s*(.*)")
+    
+    if command then
+        command = string.lower(command)
+    else
+        command = ""
+        remainder = ""
+    end
     
     if command == "" then
         self:ToggleInterface()
-    elseif command == "test" then
-        self:ToggleTestMode()
-    elseif command == "reset" then
-        self:ResetSession()
-    elseif command == "start" then
-        self:StartSession()
-    elseif command == "devmode" then
-        self:ToggleDevMode()
+    elseif command == "debug" then
+        self:ToggleDebugMode()
     elseif command == "help" then
         self:ShowHelp()
-    elseif command == "debug" then
-        print("|cff00ff00Debug Info:|r")
-        print("Addon loaded: " .. tostring(MythicDungeonWheel ~= nil))
-        print("Main frame exists: " .. tostring(MythicDungeonWheelFrame ~= nil))
-        print("Session active: " .. tostring(self.session.active))
-        print("Test mode: " .. tostring(self.testMode))
-        print("Dev mode: " .. tostring(self.devMode))
-        
-        -- Debug keystone detection
-        local keystones = self:GetPlayerKeystones()
-        print("Keystones found: " .. #keystones)
-        for i, keystone in ipairs(keystones) do
-            print("  " .. i .. ": +" .. (keystone.level or 0) .. " " .. (keystone.dungeon or "Unknown"))
-        end
-        
-    elseif command == "scan" then
-        print("|cff00ff00Scanning bags for keystones...|r")
-        local keystones = self:GetPlayerKeystones()
-        if #keystones == 0 then
-            print("|cffff0000No keystones found in bags.|r")
-            print("Make sure you have a Mythic Keystone item.")
-        else
-            print("|cff00ff00Found " .. #keystones .. " keystone(s):|r")
-            for i, keystone in ipairs(keystones) do
-                print("  " .. i .. ": +" .. keystone.level .. " " .. keystone.dungeon)
+    -- Debug mode commands
+    elseif self.debugMode then
+        if command == "test" then
+            self:ToggleTestMode()
+        elseif command == "reset" then
+            self:ResetSession()
+        elseif command == "start" then
+            self:StartSession()
+        elseif command == "scan" then
+            print("|cff00ff00Scanning bags for keystones...|r")
+            local keystones = self:GetPlayerKeystones()
+            if #keystones == 0 then
+                print("|cffff0000No keystones found in bags.|r")
+                print("Make sure you have a Mythic Keystone item.")
+            else
+                print("|cff00ff00Found " .. #keystones .. " keystone(s):|r")
+                for i, keystone in ipairs(keystones) do
+                    print("  " .. i .. ": +" .. keystone.level .. " " .. keystone.dungeon)
+                end
             end
+        elseif command == "info" then
+            print("|cff00ff00Debug Info:|r")
+            print("Addon loaded: " .. tostring(MythicDungeonWheel ~= nil))
+            print("Main frame exists: " .. tostring(MythicDungeonWheelFrame ~= nil))
+            print("Session active: " .. tostring(self.session.active))
+            print("Test mode: " .. tostring(self.testMode))
+            print("Debug mode: " .. tostring(self.debugMode))
+            
+            -- Debug keystone detection
+            local keystones = self:GetPlayerKeystones()
+            print("Keystones found: " .. #keystones)
+            for i, keystone in ipairs(keystones) do
+                print("  " .. i .. ": +" .. (keystone.level or 0) .. " " .. (keystone.dungeon or "Unknown"))
+            end
+        elseif command == "stats" then
+            self:ShowStatistics()
+        elseif command == "resetstats" then
+            self:ResetStatistics(remainder)
+        else
+            print("|cffff0000Unknown debug command:|r " .. command)
+            self:ShowHelp()
         end
     else
-        print("|cffff0000Unknown command:|r " .. command)
+        print("|cffff0000Unknown command:|r " .. command .. " (Use '/mdw debug' to enable more commands)")
         self:ShowHelp()
     end
 end
 
 function MDW:ShowHelp()
     print("|cff00ff00Mythic Dungeon Wheel Commands:|r")
-    print("  /mdw - Toggle interface")
-    print("  /mdw start - Start a new session (any party member)")
-    print("  /mdw reset - Reset current session (any party member)")
-    print("  /mdw test - Toggle test mode (adds fake keystones)")
-    print("  /mdw devmode - Toggle developer mode (shows test button)")
-    print("  /mdw scan - Scan bags for keystones")
-    print("  /mdw debug - Show debug information")
-    print("  /mdw help - Show this help")
+    print("  /mdw - Opens the Mythic Dungeon Wheel window")
+    print("  /mdw debug - Enables debug mode, unlocking more commands and logging")
+    print("  /mdw help - Shows list of currently available commands")
+    
+    if self.debugMode then
+        print("|cffffff00Debug Mode Commands (Additional):|r")
+        print("  /mdw start - Start a new session (any party member)")
+        print("  /mdw reset - Reset current session (any party member)")
+        print("  /mdw test - Toggle test mode (adds fake keystones)")
+        print("  /mdw scan - Scan bags for keystones")
+        print("  /mdw stats - Show wheel decision statistics")
+        print("  /mdw resetStats - Reset all statistics data")
+        print("  /mdw info - Show debug information")
+    end
+end
+
+function MDW:ShowStatistics()
+    print("|cff00ff00Mythic Dungeon Wheel Statistics:|r")
+    print("Total keys completed: " .. (MythicDungeonWheelDB.statistics.totalCompleted or 0))
+    
+    if MythicDungeonWheelDB.statistics.completedKeys and #MythicDungeonWheelDB.statistics.completedKeys > 0 then
+        print("|cffffff00Recent completed keys:|r")
+        local recent = {}
+        for i = math.max(1, #MythicDungeonWheelDB.statistics.completedKeys - 9), #MythicDungeonWheelDB.statistics.completedKeys do
+            table.insert(recent, MythicDungeonWheelDB.statistics.completedKeys[i])
+        end
+        
+        for i, key in ipairs(recent) do
+            print("  " .. key.date .. " - " .. key.dungeon)
+        end
+        
+        if #MythicDungeonWheelDB.statistics.completedKeys > 10 then
+            print("  ... (showing last 10 entries)")
+        end
+    else
+        print("No completed keys yet. Start wheeling to build your statistics!")
+    end
+    
+    -- Show voting behavior statistics
+    print("|cffffff00Voting Behavior:|r")
+    print("You have obeyed the wheel: " .. (MythicDungeonWheelDB.statistics.yesVotes or 0) .. " times")
+    print("You have disobeyed the wheel: " .. (MythicDungeonWheelDB.statistics.noVotes or 0) .. " times")
+end
+
+function MDW:ResetStatistics(args)
+    -- Only allow in debug mode for safety
+    if not self.debugMode then
+        print("|cffff0000Error:|r resetStats command is only available in debug mode")
+        return
+    end
+    
+    -- Check if user provided confirmation
+    if not args or string.lower(args) ~= "confirm" then
+        print("|cffff0000WARNING:|r This will permanently delete all your statistics data!")
+        print("Type '/mdw resetStats confirm' to proceed with the reset.")
+        return
+    end
+    
+    -- Reset all statistics data
+    MythicDungeonWheelDB.statistics = {
+        completedKeys = {},
+        totalCompleted = 0,
+        yesVotes = 0,
+        noVotes = 0
+    }
+    
+    print("|cff00ff00All statistics have been reset!|r")
+    print("Completed keys: 0")
+    print("Voting behavior: 0 obeyed, 0 disobeyed")
+    
+    -- Update the UI display if it's showing
+    self:UpdateVotingStatsDisplay()
+end
+
+function MDW:UpdateVotingStatsDisplay()
+    local statsFrame = MythicDungeonWheelFrameVotingStats
+    local statsText = MythicDungeonWheelFrameVotingStatsText
+    if not statsFrame or not statsText then
+        return
+    end
+    
+    local hasActiveSession = self.session and self.session.active
+    
+    -- Hide stats on results screen (when vote result is being shown)
+    local resultFrame = MythicDungeonWheelFrameVoteResult
+    if resultFrame and resultFrame:IsShown() then
+        statsFrame:Hide()
+        return
+    end
+    
+    -- Hide stats during ANY active session
+    if hasActiveSession then
+        statsFrame:Hide()
+        return
+    end
+    
+    -- Show stats only on idle screen (no active session)
+    statsFrame:Show()
+    local yesVotes = MythicDungeonWheelDB.statistics.yesVotes or 0
+    local noVotes = MythicDungeonWheelDB.statistics.noVotes or 0
+    statsText:SetText("You have obeyed the wheel: " .. yesVotes .. " times\nYou have disobeyed the wheel: " .. noVotes .. " times")
 end
 
 function MDW:ToggleTestMode()
     self.testMode = not self.testMode
     if self.testMode then
-        print("|cff00ff00Test mode enabled|r - Fake keystones will be available")
+        if self.debugMode then
+            print("|cff00ff00Test mode enabled|r - Fake keystones will be available")
+        end
         self:AddTestKeystones()
     else
-        print("|cffff0000Test mode disabled|r")
-        -- Clear test data
-        self.testPlayerKeystones = nil
+        if self.debugMode then
+            print("|cffff0000Test mode disabled|r")
+        end
         -- Reset session if it was a test session
         if self.session.active then
-            print("|cffffff00Resetting test session...|r")
+            if self.debugMode then
+                print("|cffffff00Resetting test session...|r")
+            end
             self:ResetSession()
         end
     end
     self:UpdateInterface()
 end
 
-function MDW:ToggleDevMode()
-    self.devMode = not self.devMode
-    if self.devMode then
-        print("|cff00ff00Developer mode enabled|r - Test button is now visible")
+function MDW:ToggleDebugMode()
+    self.debugMode = not self.debugMode
+    if self.debugMode then
+        print("|cff00ff00Debug mode enabled|r - Additional commands are now available")
+        print("Type '/mdw help' to see the full command list")
     else
-        print("|cffff0000Developer mode disabled|r - Test button is now hidden")
+        print("|cffff0000Debug mode disabled|r - Only basic commands are available")
         -- If test mode was active, disable it too
         if self.testMode then
             self:ToggleTestMode()
@@ -380,8 +432,8 @@ function MDW:AddTestKeystones()
         {level = 13, dungeon = "Tazavesh: Streets of Wonder"}
     }
     
-    -- Add keystones from fake players (simulate other group members)
-    for i = 1, 3 do
+    -- Add keystones from 4 fake players (excluding yours, so 5 total when you add yours)
+    for i = 1, 4 do
         local player = testPlayers[i]
         local keystone = testKeystones[i]
         local keystoneKey = player .. "_" .. keystone.level .. "_" .. keystone.dungeon
@@ -394,29 +446,26 @@ function MDW:AddTestKeystones()
         }
     end
     
-    -- Keep some keystones available for the current player to add
-    -- Store available keystones for the player
-    if not self.testPlayerKeystones then
-        self.testPlayerKeystones = {}
-        for i = 4, 6 do
-            table.insert(self.testPlayerKeystones, testKeystones[i])
-        end
+    if self.debugMode then
+        print("|cff00ff00Test mode:|r Added 4 fake players with keystones. Add your own keystone to make 5 total.")
     end
-    
-    print("|cff00ff00Test mode:|r Added 3 fake players with keystones. You have 3 keystones available to add.")
 end
 
 -- Session management
 function MDW:StartSession()
     -- Check if there's already an active session
     if self.session.active then
-        print("|cffff0000A session is already active (owned by " .. (self.session.owner or "Unknown") .. "). Reset it first.|r")
+        if self.debugMode then
+            print("|cffff0000A session is already active (owned by " .. (self.session.owner or "Unknown") .. "). Reset it first.|r")
+        end
         return
     end
     
     -- Allow any party member to start a session (or solo in test mode)
     if not self.testMode and not IsInGroup() then
-        print("|cffff0000You must be in a party or raid to start a session.|r")
+        if self.debugMode then
+            print("|cffff0000You must be in a party or raid to start a session.|r")
+        end
         return
     end
     
@@ -439,56 +488,122 @@ function MDW:StartSession()
         })
     end
     
-    print("|cff00ff00Session started!|r Players can now add their keystones.")
+    if self.debugMode then
+        print("|cff00ff00Session started!|r Players can now add their keystones.")
+    end
     self:UpdateInterface()
 end
 
 function MDW:ResetSession()
-    -- Anyone can reset a session
-    if not self.session.active then
-        print("|cffff0000No active session to reset.|r")
+    -- Check if there's any active session OR ongoing animation to reset
+    local hasActiveSession = self.session.active
+    local hasActiveAnimation = self.scrollingAnimation.isAnimating
+    
+    if not hasActiveSession and not hasActiveAnimation then
+        if self.debugMode then
+            print("|cffff0000No active session or animation to reset.|r")
+        end
         return
     end
     
     local wasOwner = self.session.isOwner
     local previousOwner = self.session.owner
     
+    -- Stop any ongoing scrolling animation immediately
+    if hasActiveAnimation then
+        if self.debugMode then
+            print("|cffffff00Stopping ongoing animation...|r")
+        end
+        self.scrollingAnimation.isAnimating = false
+        self.scrollingAnimation.selectedKeystone = nil
+        self.scrollingAnimation.keystoneSnapshot = nil
+    end
+    
+    -- Hide voting UI when resetting
+    self:HideVotingUI()
+    
+    -- Always reset all button highlighting back to default when resetting session
+    local content = (self.ui and self.ui.keystoneListChild) or MythicDungeonWheelFrameKeystoneListScrollChild
+    if content and content.buttons then
+        for _, button in ipairs(content.buttons) do
+            if button and button.bg and button.bg.SetColorTexture then
+                button.bg:SetColorTexture(0.2, 0.2, 0.2, 0.8) -- Default gray
+            end
+        end
+    end
+    
+    -- Reset session data (even if session wasn't active, ensure it's fully cleared)
     self.session.active = false
     self.session.owner = nil
     self.session.participants = {}
     self.session.keystones = {}
     self.session.selectedKeystone = nil
+    self.session.selectedKeystoneRemoved = false
     self.session.isOwner = false
     
-    -- Notify group if in a group
-    if IsInGroup() then
+    -- Reset voting state
+    if self.session.voting.timer then
+        self.session.voting.timer:Cancel()
+        self.session.voting.timer = nil
+    end
+    
+    -- Cancel auto-reset timer if it exists
+    if self.session.autoResetTimer then
+        self.session.autoResetTimer:Cancel()
+        self.session.autoResetTimer = nil
+    end
+    
+    self.session.voting.active = false
+    self.session.voting.votes = {}
+    self.session.voting.voteCount = 0
+    self.session.voting.totalVotes = 0
+    self.session.voting.totalMembers = 0
+    self.session.voting.timeLeft = 30
+    self:HideVotingUI()
+    
+    -- Hide vote result
+    local resultFrame = MythicDungeonWheelFrameVoteResult
+    if resultFrame then
+        resultFrame:Hide()
+    end
+    
+    -- Reset scrolling animation state to initial values
+    self.scrollingAnimation = {
+        isAnimating = false,
+        selectedKeystone = nil
+    }
+    
+    -- Notify group if in a group and there was an active session
+    if IsInGroup() and hasActiveSession then
         self:SendMessage("SESSION_RESET", {
             resetBy = UnitName("player"),
             previousOwner = previousOwner
         })
     end
     
-    print("|cff00ff00Session reset.|r")
+    if hasActiveSession and hasActiveAnimation then
+        if self.debugMode then
+            print("|cff00ff00Session and animation reset. Addon returned to initial state.|r")
+        end
+    elseif hasActiveSession then
+        if self.debugMode then
+            print("|cff00ff00Session reset. Addon returned to initial state.|r")
+        end
+    elseif hasActiveAnimation then
+        if self.debugMode then
+            print("|cff00ff00Animation stopped. Addon returned to initial state.|r")
+        end
+    end
+    
     self:UpdateInterface()
-end
-
-function MDW:IsGroupLeader()
-    return UnitIsGroupLeader("player")
 end
 
 -- Keystone management
 function MDW:GetPlayerKeystones()
     local keystones = {}
     
-    -- In test mode, simulate having a single keystone (more realistic)
-    if self.testMode then
-        -- Return a single test keystone to simulate finding one in bags
-        return {
-            {level = 16, dungeon = "Priory of the Sacred Flame", isTest = true}
-        }
-    end
-    
-    -- Scan bags for actual keystones using multiple detection methods
+    -- First, scan bags for actual keystones using multiple detection methods
+    self:DebugPrint("MDW Debug: Starting keystone scan...")
     for bag = 0, 4 do
         local numSlots = C_Container.GetContainerNumSlots(bag)
         if numSlots then
@@ -497,22 +612,36 @@ function MDW:GetPlayerKeystones()
                 if itemInfo then
                     local itemLink = C_Container.GetContainerItemLink(bag, slot)
                     if itemLink then
-                        -- Method 1: Check by item ID
-                        if itemInfo.itemID == KEYSTONE_ITEM_ID then
+                        -- Debug: Print every item we examine
+                        self:DebugPrint("MDW Debug: Examining bag " .. bag .. " slot " .. slot .. " - ItemID: " .. (itemInfo.itemID or "nil") .. " - Link: " .. (itemLink or "nil"))
+                        
+                        -- Method 1: Check if this is a keystone by examining the link format
+                        if itemLink:find("|Hkeystone:") then
+                            self:DebugPrint("MDW Debug: Found keystone by link format in bag " .. bag .. " slot " .. slot)
                             local keystone = self:ParseKeystoneLink(itemLink)
                             if keystone then
                                 table.insert(keystones, keystone)
                             end
-                        -- Method 2: Check by item name (fallback)
+                        -- Method 2: Check by item ID (fallback)
+                        elseif itemInfo.itemID == KEYSTONE_ITEM_ID then
+                            self:DebugPrint("MDW Debug: Found keystone by item ID in bag " .. bag .. " slot " .. slot)
+                            local keystone = self:ParseKeystoneLink(itemLink)
+                            if keystone then
+                                table.insert(keystones, keystone)
+                            end
+                        -- Method 3: Check by item name (fallback)
                         elseif itemLink:find(KEYSTONE_ITEM_NAME) then
+                            self:DebugPrint("MDW Debug: Found keystone by name in bag " .. bag .. " slot " .. slot)
                             local keystone = self:ParseKeystoneLink(itemLink)
                             if keystone then
                                 table.insert(keystones, keystone)
                             end
-                        -- Method 3: Check by tooltip scanning (most reliable)
-                        else
+                        -- Method 4: Tooltip scanning (most comprehensive fallback)
+                        elseif itemLink:find("Keystone") or itemLink:find("Mythic") then
+                            self:DebugPrint("MDW Debug: Potential keystone found, scanning tooltip...")
                             local keystone = self:ScanKeystoneTooltip(bag, slot, itemLink)
                             if keystone then
+                                self:DebugPrint("MDW Debug: Found keystone by tooltip scan in bag " .. bag .. " slot " .. slot)
                                 table.insert(keystones, keystone)
                             end
                         end
@@ -521,37 +650,88 @@ function MDW:GetPlayerKeystones()
             end
         end
     end
+    self:DebugPrint("MDW Debug: Keystone scan complete. Found " .. #keystones .. " keystones.")
     
-    -- If no keystones found, show a helpful message
-    if #keystones == 0 and self.session.active then
-        print("|cffffff00No keystones found in bags.|r Make sure you have a Mythic Keystone.")
+    -- ONLY in test mode: if no real keystones found, provide a fallback keystone
+    if self.testMode and #keystones == 0 then
+        self:DebugPrint("|cffffff00No keystones found in bags, using fallback test keystone.|r")
+        return {
+            {level = 17, dungeon = "Priory of the Sacred Flame", isTest = true}
+        }
+    end
+    
+    -- In normal mode: if no keystones found, just return empty table (no buttons will show)
+    -- Only show helpful message if in an active session
+    if #keystones == 0 and self.session.active and not self.testMode then
+        self:DebugPrint("|cffffff00No keystones found in bags.|r Make sure you have a Mythic Keystone.")
     end
     
     return keystones
 end
 
 function MDW:ScanKeystoneTooltip(bag, slot, itemLink)
-    -- Simple tooltip scan - just look for keystone level
-    local tooltip = CreateFrame("GameTooltip", "MDWKeystoneTooltip", nil, "GameTooltipTemplate")
+    -- Create a unique tooltip for scanning
+    local tooltipName = "MDWKeystoneTooltip" .. bag .. slot
+    local tooltip = CreateFrame("GameTooltip", tooltipName, nil, "GameTooltipTemplate")
     tooltip:SetOwner(UIParent, "ANCHOR_NONE")
     tooltip:SetBagItem(bag, slot)
     
-    -- Check tooltip lines for keystone level
+    local foundKeystone = nil
+    
+    -- Check tooltip lines for keystone information
     for i = 1, tooltip:NumLines() do
-        local line = _G["MDWKeystoneTooltipTextLeft" .. i]
-        if line then
-            local text = line:GetText()
+        local leftLine = _G[tooltipName .. "TextLeft" .. i]
+        if leftLine then
+            local text = leftLine:GetText()
             if text then
-                -- Look for keystone level indicators
-                if text:find("Mythic") and text:find("Level") then
-                    local level = text:match("Level (%d+)")
+                -- Look for "Keystone: DungeonName" in tooltip
+                if text:find("Keystone:") then
+                    local dungeonName = text:match("Keystone: (.+)")
+                    if dungeonName then
+                        -- Look for level in the next few lines
+                        for j = i, math.min(i + 3, tooltip:NumLines()) do
+                            local levelLine = _G[tooltipName .. "TextLeft" .. j]
+                            if levelLine then
+                                local levelText = levelLine:GetText()
+                                if levelText then
+                                    local level = levelText:match("Level (%d+)") or levelText:match("%+(%d+)")
+                                    if level then
+                                        foundKeystone = {
+                                            level = tonumber(level),
+                                            dungeon = dungeonName,
+                                            link = itemLink
+                                        }
+                                        self:DebugPrint("MDW Debug: Tooltip scan found - Level: " .. level .. ", Dungeon: " .. dungeonName)
+                                        break
+                                    end
+                                end
+                            end
+                        end
+                        break
+                    end
+                end
+                
+                -- Alternative: Look for "Mythic" and level patterns
+                if not foundKeystone and (text:find("Mythic") or text:find("Keystone")) then
+                    local level = text:match("Level (%d+)") or text:match("%+(%d+)")
                     if level then
-                        tooltip:Hide()
-                        return {
+                        -- Try to get dungeon name from item link or use generic name
+                        local dungeonName = "Mythic Keystone"
+                        local visibleText = itemLink and itemLink:match("|h%[([^%]]+)%]|h")
+                        if visibleText then
+                            local extractedDungeon = visibleText:match("Keystone: ([^%(]+)")
+                            if extractedDungeon then
+                                dungeonName = extractedDungeon:trim()
+                            end
+                        end
+                        
+                        foundKeystone = {
                             level = tonumber(level),
-                            dungeon = "Keystone", -- Simple fallback
+                            dungeon = dungeonName,
                             link = itemLink
                         }
+                        self:DebugPrint("MDW Debug: Tooltip scan fallback found - Level: " .. level .. ", Dungeon: " .. dungeonName)
+                        break
                     end
                 end
             end
@@ -559,66 +739,62 @@ function MDW:ScanKeystoneTooltip(bag, slot, itemLink)
     end
     
     tooltip:Hide()
-    return nil
+    return foundKeystone
 end
 
 function MDW:ParseKeystoneLink(itemLink)
-    -- Simple keystone parsing - just get level and dungeon name
-    
     if not itemLink then return nil end
     
-    -- Method 1: Extract info from the visible text in the link
+    self:DebugPrint("MDW Debug: Parsing keystone link: " .. itemLink)
+    
+    -- Extract the display text from the link - this is what the player sees
     -- Format: |cffa335ee|Hkeystone:...|h[Keystone: DungeonName (+Level)]|h|r
     local visibleText = itemLink:match("|h%[([^%]]+)%]|h")
+    self:DebugPrint("MDW Debug: Visible text: " .. tostring(visibleText))
+    
     if visibleText then
-        local level = visibleText:match("%+(%d+)")
+        -- Extract level from (+XX) pattern
+        local level = visibleText:match("%(+(%d+)%)")
+        
+        -- Extract dungeon name from "Keystone: DungeonName" pattern
         local dungeon = visibleText:match("Keystone: ([^%(]+)")
+        
+        self:DebugPrint("MDW Debug: Extracted level: " .. tostring(level) .. ", dungeon: " .. tostring(dungeon))
+        
         if level and dungeon then
+            -- Clean up the dungeon name (remove extra whitespace)
+            dungeon = string.trim(dungeon)
+            
+            self:DebugPrint("MDW Debug: Successfully parsed - Level: " .. level .. ", Dungeon: '" .. dungeon .. "'")
             return {
                 level = tonumber(level),
-                dungeon = dungeon:trim(),
+                dungeon = dungeon,
                 link = itemLink
             }
+        else
+            self:DebugPrint("MDW Debug: Could not extract level or dungeon from visible text")
         end
+    else
+        self:DebugPrint("MDW Debug: Could not extract visible text from link")
     end
     
-    -- Method 2: Try to get level and mapID from link data, then use API for dungeon name
-    local linkData = itemLink:match("|H([^|]*)|h")
-    if linkData then
-        local parts = {strsplit(":", linkData)}
-        if parts[1] == "keystone" and parts[3] then
-            local mapID = tonumber(parts[2])
-            local level = tonumber(parts[3])
-            
-            -- Get dungeon name from API only (no manual fallback needed)
-            local dungeonName = "Unknown Dungeon"
-            if mapID and C_ChallengeMode and C_ChallengeMode.GetMapUIInfo then
-                local mapInfo = C_ChallengeMode.GetMapUIInfo(mapID)
-                if mapInfo and mapInfo.name then
-                    dungeonName = mapInfo.name
-                end
-            end
-            
-            return {
-                level = level,
-                dungeon = dungeonName,
-                link = itemLink
-            }
-        end
-    end
-    
+    self:DebugPrint("MDW Debug: Failed to parse keystone")
     return nil
 end
 
 function MDW:AddPlayerKeystone(keystoneIndex)
     if not self.session.active then
-        print("|cffff0000No active session. Any party member can start one.|r")
+        if self.debugMode then
+            print("|cffff0000No active session. Any party member can start one.|r")
+        end
         return
     end
     
     -- Don't allow adding keystones while rolling animation is active
     if self.scrollingAnimation.isAnimating then
-        print("|cffff0000Cannot add keystones while rolling is in progress.|r")
+        if self.debugMode then
+            print("|cffff0000Cannot add keystones while rolling is in progress.|r")
+        end
         return
     end
     
@@ -627,7 +803,9 @@ function MDW:AddPlayerKeystone(keystoneIndex)
     -- Check if player already has a keystone in the session
     for key, keystone in pairs(self.session.keystones) do
         if keystone.player == playerName then
-            print("|cffff0000You already have a keystone in this session:|r " .. keystone.level .. " " .. keystone.dungeon)
+            if self.debugMode then
+                print("|cffff0000You already have a keystone in this session:|r " .. keystone.level .. " " .. keystone.dungeon)
+            end
             return
         end
     end
@@ -636,7 +814,9 @@ function MDW:AddPlayerKeystone(keystoneIndex)
     local keystone = keystones[keystoneIndex]
     
     if not keystone then
-        print("|cffff0000Invalid keystone selection.|r")
+        if self.debugMode then
+            print("|cffff0000Invalid keystone selection.|r")
+        end
         return
     end
     
@@ -660,7 +840,9 @@ function MDW:AddPlayerKeystone(keystoneIndex)
         })
     end
     
-    print("|cff00ff00Keystone added to session!|r +" .. keystone.level .. " " .. keystone.dungeon)
+    if self.debugMode then
+        print("|cff00ff00Keystone added to session!|r +" .. keystone.level .. " " .. keystone.dungeon)
+    end
     self:UpdateInterface()
 end
 
@@ -680,29 +862,57 @@ end
 
 function MDW:RemoveKeystoneFromSession(keystoneKey, keystone)
     if not self.session.active then
-        print("|cffff0000No active session.|r")
+        if self.debugMode then
+            print("|cffff0000No active session.|r")
+        end
         return
     end
     
     -- Don't allow removing keystones while rolling animation is active
     if self.scrollingAnimation.isAnimating then
-        print("|cffff0000Cannot remove keystones while rolling is in progress.|r")
+        if self.debugMode then
+            print("|cffff0000Cannot remove keystones while rolling is in progress.|r")
+        end
+        return
+    end
+    
+    -- Don't allow removing keystones while voting is active
+    if self.session.voting and self.session.voting.active then
+        if self.debugMode then
+            print("|cffff0000Cannot remove keystones while voting is in progress.|r")
+        end
         return
     end
     
     -- Only session owner can remove other players' keystones
     if not self.session.isOwner then
-        print("|cffff0000Only the session owner can remove keystones.|r")
+        if self.debugMode then
+            print("|cffff0000Only the session owner can remove keystones.|r")
+        end
         return
     end
     
     if not self.session.keystones[keystoneKey] then
-        print("|cffff0000Keystone not found in session.|r")
+        if self.debugMode then
+            print("|cffff0000Keystone not found in session.|r")
+        end
         return
     end
     
     -- Remove keystone from session
     self.session.keystones[keystoneKey] = nil
+    
+    -- Check if the removed keystone was the selected winner and update display
+    if self.session.selectedKeystone and 
+       self.session.selectedKeystone.player == keystone.player and
+       self.session.selectedKeystone.level == keystone.level and
+       self.session.selectedKeystone.dungeon == keystone.dungeon then
+        -- Mark that the selected keystone was removed
+        self.session.selectedKeystoneRemoved = true
+        if self.debugMode then
+            print("|cffffff00Marked selected keystone as removed|r")
+        end
+    end
     
     -- Notify group (only if in a group)
     if IsInGroup() then
@@ -714,19 +924,33 @@ function MDW:RemoveKeystoneFromSession(keystoneKey, keystone)
         })
     end
     
-    print("|cff00ff00Removed keystone:|r " .. keystone.player .. "'s +" .. keystone.level .. " " .. keystone.dungeon)
+    if self.debugMode then
+        print("|cff00ff00Removed keystone:|r " .. keystone.player .. "'s +" .. keystone.level .. " " .. keystone.dungeon)
+    end
     self:UpdateInterface()
 end
 
 function MDW:RemovePlayerKeystone()
     if not self.session.active then
-        print("|cffff0000No active session.|r")
+        if self.debugMode then
+            print("|cffff0000No active session.|r")
+        end
         return
     end
     
     -- Don't allow removing keystones while rolling animation is active
     if self.scrollingAnimation.isAnimating then
-        print("|cffff0000Cannot remove keystones while rolling is in progress.|r")
+        if self.debugMode then
+            print("|cffff0000Cannot remove keystones while rolling is in progress.|r")
+        end
+        return
+    end
+    
+    -- Don't allow removing keystones while voting is active
+    if self.session.voting and self.session.voting.active then
+        if self.debugMode then
+            print("|cffff0000Cannot remove keystones while voting is in progress.|r")
+        end
         return
     end
     
@@ -734,12 +958,26 @@ function MDW:RemovePlayerKeystone()
     local keystoneKey, keystone = self:GetPlayerKeystoneInSession()
     
     if not keystoneKey then
-        print("|cffff0000You don't have a keystone in this session.|r")
+        if self.debugMode then
+            print("|cffff0000You don't have a keystone in this session.|r")
+        end
         return
     end
     
     -- Remove keystone from session
     self.session.keystones[keystoneKey] = nil
+    
+    -- Check if the removed keystone was the selected winner and update display
+    if self.session.selectedKeystone and 
+       self.session.selectedKeystone.player == keystone.player and
+       self.session.selectedKeystone.level == keystone.level and
+       self.session.selectedKeystone.dungeon == keystone.dungeon then
+        -- Mark that the selected keystone was removed
+        self.session.selectedKeystoneRemoved = true
+        if self.debugMode then
+            print("|cffffff00Marked selected keystone as removed|r")
+        end
+    end
     
     -- Notify group (only if in a group)
     if IsInGroup() then
@@ -750,7 +988,9 @@ function MDW:RemovePlayerKeystone()
         })
     end
     
-    print("|cff00ff00Keystone removed from session!|r +" .. keystone.level .. " " .. keystone.dungeon)
+    if self.debugMode then
+        print("|cff00ff00Keystone removed from session!|r +" .. keystone.level .. " " .. keystone.dungeon)
+    end
     self:UpdateInterface()
 end
 
@@ -769,7 +1009,9 @@ function MDW:SelectRandomKeystone()
     end
     
     if #keystoneList == 0 then
-        print("|cffff0000No keystones available for selection.|r")
+        if self.debugMode then
+            print("|cffff0000No keystones available for selection.|r")
+        end
         return
     end
     
@@ -837,11 +1079,15 @@ function MDW:CHAT_MSG_ADDON(prefix, message, distribution, sender)
             self.session.isOwner = false
             self.session.keystones = {}
             self.session.selectedKeystone = nil
-            print("|cff00ff00Session started by " .. (data and data.owner or sender) .. "|r")
+            if self.debugMode then
+                print("|cff00ff00Session started by " .. (data and data.owner or sender) .. "|r")
+            end
             self:UpdateInterface()
         else
             -- Session already exists, notify sender
-            print("|cffff9999Ignoring session start from " .. sender .. " - session already active by " .. (self.session.owner or "Unknown") .. "|r")
+            if self.debugMode then
+                print("|cffff9999Ignoring session start from " .. sender .. " - session already active by " .. (self.session.owner or "Unknown") .. "|r")
+            end
         end
         
     elseif msgType == "SESSION_RESET" then
@@ -854,7 +1100,9 @@ function MDW:CHAT_MSG_ADDON(prefix, message, distribution, sender)
             self.session.keystones = {}
             self.session.selectedKeystone = nil
             self.session.isOwner = false
-            print("|cff00ff00Session reset by " .. resetBy .. "|r")
+            if self.debugMode then
+                print("|cff00ff00Session reset by " .. resetBy .. "|r")
+            end
             self:UpdateInterface()
         end
         
@@ -867,7 +1115,9 @@ function MDW:CHAT_MSG_ADDON(prefix, message, distribution, sender)
                 dungeon = data.dungeon,
                 isTest = data.isTest == "true"
             }
-            print(data.player .. " added a keystone to the session.")
+            if self.debugMode then
+                print(data.player .. " added a keystone to the session.")
+            end
             self:UpdateInterface()
         end
         
@@ -878,9 +1128,13 @@ function MDW:CHAT_MSG_ADDON(prefix, message, distribution, sender)
             
             -- Show different message based on who removed it
             if data.removedBy and data.removedBy ~= data.player then
-                print(data.removedBy .. " removed " .. data.player .. "'s keystone from the session.")
+                if self.debugMode then
+                    print(data.removedBy .. " removed " .. data.player .. "'s keystone from the session.")
+                end
             else
-                print(data.player .. " removed their keystone from the session.")
+                if self.debugMode then
+                    print(data.player .. " removed their keystone from the session.")
+                end
             end
             self:UpdateInterface()
         end
@@ -893,8 +1147,78 @@ function MDW:CHAT_MSG_ADDON(prefix, message, distribution, sender)
                 dungeon = data.dungeon,
                 isTest = data.isTest == "true"
             }
-            print("|cff00ff00Selected keystone:|r " .. data.player .. "'s +" .. data.level .. " " .. data.dungeon)
+            if self.debugMode then
+                print("|cff00ff00Selected keystone:|r " .. data.player .. "'s +" .. data.level .. " " .. data.dungeon)
+            end
             self:UpdateInterface()
+        end
+        
+    elseif msgType == "VOTING_STARTED" then
+        if data and data.totalMembers then
+            self.session.voting.active = true
+            self.session.voting.votes = {}
+            self.session.voting.voteCount = 0
+            self.session.voting.totalVotes = 0
+            self.session.voting.totalMembers = tonumber(data.totalMembers)
+            self.session.voting.timeLeft = 30
+            self:ShowVotingUI()
+            self:StartVotingTimer()
+            self:DebugPrint("Voting started - 30 seconds for " .. data.totalMembers .. " members")
+        end
+        
+    elseif msgType == "VOTE_CAST" then
+        if data and data.player and data.vote and data.voteCount and data.totalVotes and data.totalMembers then
+            self.session.voting.votes[data.player] = data.vote == "true"
+            self.session.voting.voteCount = tonumber(data.voteCount)
+            self.session.voting.totalVotes = tonumber(data.totalVotes)
+            self.session.voting.totalMembers = tonumber(data.totalMembers)
+            
+            -- Update UI
+            self:UpdateVotingProgress()
+            
+            self:DebugPrint(data.player .. " voted " .. data.vote .. " (" .. data.totalVotes .. "/" .. data.totalMembers .. ")")
+        end
+        
+    elseif msgType == "VOTING_COMPLETE" then
+        if data and data.passed and data.yesVotes and data.totalMembers then
+            if self.session.voting.timer then
+                self.session.voting.timer:Cancel()
+                self.session.voting.timer = nil
+            end
+            
+            self.session.voting.active = false
+            
+            -- Hide voting buttons
+            local yesButton = MythicDungeonWheelFrameVoteYesButton
+            local noButton = MythicDungeonWheelFrameVoteNoButton
+            if yesButton then yesButton:Hide() end
+            if noButton then noButton:Hide() end
+            
+            -- Show result
+            local resultFrame = MythicDungeonWheelFrameVoteResult
+            local resultText = MythicDungeonWheelFrameVoteResultText
+            if resultFrame and resultText then
+                resultFrame:Show()
+                local passed = data.passed == "true"
+                if passed then
+                    resultText:SetText("Vote: Yes")
+                else
+                    resultText:SetText("Vote: No")
+                end
+            end
+            
+            self:DebugPrint("Vote " .. (data.passed == "true" and "passed" or "failed") .. " (" .. data.yesVotes .. "/" .. data.totalMembers .. ")")
+        end
+        
+    elseif msgType == "STATS_UPDATE" then
+        if data and data.passed and data.yesVotes and data.noVotes then
+            -- Update local statistics to match the session owner's stats
+            MythicDungeonWheelDB.statistics.yesVotes = tonumber(data.yesVotes) or 0
+            MythicDungeonWheelDB.statistics.noVotes = tonumber(data.noVotes) or 0
+            
+            local passed = data.passed == "true"
+            self:DebugPrint("Statistics synced from session owner - Group " .. (passed and "obeyed" or "disobeyed") .. " the wheel")
+            self:DebugPrint("Updated lifetime group decisions: " .. MythicDungeonWheelDB.statistics.yesVotes .. " Obeyed, " .. MythicDungeonWheelDB.statistics.noVotes .. " Disobeyed")
         end
     end
 end
@@ -916,7 +1240,7 @@ function MDW:OnAddonLoaded()
     }
     
     -- Initialize the interface
-    print("MDW Debug: Addon loaded with scrolling animation enabled")
+    self:DebugPrint("MDW Debug: Addon loaded with scrolling animation enabled")
 end
 
 -- Event registration
@@ -1003,6 +1327,9 @@ function MDW:UpdateInterface()
     
     -- Update buttons
     self:UpdateButtons()
+    
+    -- Update voting statistics display
+    self:UpdateVotingStatsDisplay()
 end
 
 function MDW:UpdateKeystoneList()
@@ -1037,7 +1364,7 @@ function MDW:UpdateKeystoneList()
                 button = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
                 content.buttons[1] = button
             end
-            button:SetSize(420, 25)
+            button:SetSize(420, 35)
             button:SetPoint("TOP", content, "TOP", 0, yOffset)
             
             local buttonText
@@ -1048,6 +1375,7 @@ function MDW:UpdateKeystoneList()
             end
             
             button:SetText(buttonText)
+            button:SetNormalFontObject("GameFontNormal")
             button:SetScript("OnClick", function()
                 MDW:RemovePlayerKeystone()
             end)
@@ -1063,7 +1391,7 @@ function MDW:UpdateKeystoneList()
             
             button:Show()
             
-            yOffset = yOffset - 30
+            yOffset = yOffset - 45
         else
             -- Player doesn't have a keystone - show add keystone buttons for player's keystones
             for i, keystone in ipairs(playerKeystones) do
@@ -1072,7 +1400,7 @@ function MDW:UpdateKeystoneList()
                     button = CreateFrame("Button", nil, content, "UIPanelButtonTemplate")
                     content.buttons[i] = button
                 end
-                button:SetSize(420, 25) -- Use maximum width to fit all text
+                button:SetSize(420, 35) -- Use maximum width to fit all text
                 
                 button:SetPoint("TOP", content, "TOP", 0, yOffset)
                 
@@ -1091,6 +1419,7 @@ function MDW:UpdateKeystoneList()
                 end
                 
                 button:SetText(buttonText)
+                button:SetNormalFontObject("GameFontNormal")
                 button:SetScript("OnClick", function()
                     MDW:AddPlayerKeystone(i)
                 end)
@@ -1106,7 +1435,7 @@ function MDW:UpdateKeystoneList()
                 
                 button:Show()
                 
-                yOffset = yOffset - 30
+                yOffset = yOffset - 45
             end
         end
     end
@@ -1126,7 +1455,7 @@ function MDW:UpdateKeystoneList()
                 button.bg:SetColorTexture(0.2, 0.2, 0.2, 0.8) -- Default gray background
                 
                 -- Create text for keystone info
-                local text = button:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+                local text = button:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
                 text:SetPoint("LEFT", button, "LEFT", 5, 0)
                 text:SetPoint("RIGHT", button, "RIGHT", -30, 0) -- Leave space for X button
                 text:SetJustifyH("LEFT")
@@ -1134,15 +1463,15 @@ function MDW:UpdateKeystoneList()
                 
                 -- Create remove button (X) for session owner
                 local removeButton = CreateFrame("Button", nil, button, "UIPanelButtonTemplate")
-                removeButton:SetSize(20, 18)
+                removeButton:SetSize(25, 25)
                 removeButton:SetPoint("RIGHT", button, "RIGHT", -5, 0)
                 removeButton:SetText("×") -- Unicode multiplication sign looks like X
-                removeButton:SetNormalFontObject("GameFontNormalSmall")
+                removeButton:SetNormalFontObject("GameFontNormal")
                 button.removeButton = removeButton
                 
                 content.buttons[buttonIndex] = button
             end
-            button:SetSize(420, 20) -- Use maximum width to fit all text
+            button:SetSize(420, 30) -- Use maximum width to fit all text
             
             -- Store keystone reference for animation and remove button
             button.keystone = keystone
@@ -1194,8 +1523,27 @@ function MDW:UpdateKeystoneList()
             
             button:Show()
             
-            yOffset = yOffset - 25
+            yOffset = yOffset - 40
             buttonIndex = buttonIndex + 1
+        end
+        
+        -- Reset all session buttons to default gray, then highlight winner if present
+        local playerKeystonesCount = #playerKeystones
+        for i = playerKeystonesCount + 1, #content.buttons do
+            local button = content.buttons[i]
+            if button and button.bg then
+                -- Reset to default gray
+                button.bg:SetColorTexture(0.2, 0.2, 0.2, 0.8)
+                
+                -- Check if this button's keystone is the selected winner and still in session
+                if self.session.selectedKeystone and button.keystone and
+                   button.keystone.player == self.session.selectedKeystone.player and
+                   button.keystone.level == self.session.selectedKeystone.level and
+                   button.keystone.dungeon == self.session.selectedKeystone.dungeon then
+                    -- This keystone is still in session and is the winner - highlight it green
+                    button.bg:SetColorTexture(0.2, 0.8, 0.2, 0.9)
+                end
+            end
         end
     end
 end
@@ -1207,11 +1555,6 @@ function MDW:UpdateSelectedKeystone()
     if self.session.selectedKeystone then
         local keystone = self.session.selectedKeystone
         if keystone then
-            local testIndicator = (keystone.isTest and " (TEST)") or ""
-            local player = keystone.player or "Unknown"
-            local level = keystone.level or 0
-            local dungeon = keystone.dungeon or "Unknown"
-            
             local selectedText = (self.ui and self.ui.selectedKeystoneText) or MythicDungeonWheelFrameSelectedKeystoneText
             if selectedText then
                 -- Set label and content separately
@@ -1219,7 +1562,17 @@ function MDW:UpdateSelectedKeystone()
                 if labelText then
                     labelText:SetText("Selected:")
                 end
-                selectedText:SetText(player .. "'s +" .. level .. " " .. dungeon .. testIndicator)
+                
+                -- Check if the selected keystone was removed
+                if self.session.selectedKeystoneRemoved then
+                    selectedText:SetText("REMOVED")
+                else
+                    local testIndicator = (keystone.isTest and " (TEST)") or ""
+                    local player = keystone.player or "Unknown"
+                    local level = keystone.level or 0
+                    local dungeon = keystone.dungeon or "Unknown"
+                    selectedText:SetText(player .. "'s +" .. level .. " " .. dungeon .. testIndicator)
+                end
             end
             selectedFrame:Show()
             
@@ -1283,13 +1636,23 @@ function MDW:UpdateButtons()
         end
     end
     
-    -- Test button - only show if developer mode is enabled
+    -- Test button - only show if debug mode is enabled
     local testButton = MythicDungeonWheelFrameTestButton
     if testButton then
-        if self.devMode then
+        if self.debugMode then
             testButton:Show()
         else
             testButton:Hide()
+        end
+    end
+    
+    -- Party required text - show when not in session, not in group, and not in test mode
+    local partyRequiredFrame = MythicDungeonWheelFramePartyRequiredFrame
+    if partyRequiredFrame then
+        if not self.session.active and not IsInGroup() and not self.testMode then
+            partyRequiredFrame:Show()
+        else
+            partyRequiredFrame:Hide()
         end
     end
 end
@@ -1306,9 +1669,14 @@ end
 -- Simple scrolling animation for wheel mode
 function MDW:StartScrollingAnimation(keystoneList)
     if self.scrollingAnimation.isAnimating then
-        print("|cffff0000Already animating selection.|r")
+        if self.debugMode then
+            print("|cffff0000Already animating selection.|r")
+        end
         return
     end
+    
+    -- Hide voting UI during animation
+    self:HideVotingUI()
     
     -- Take a snapshot of the current keystones to ensure consistency during animation
     local keystoneSnapshot = {}
@@ -1331,7 +1699,9 @@ function MDW:StartScrollingAnimation(keystoneList)
     self.scrollingAnimation.keystoneSnapshot = keystoneSnapshot
     self.scrollingAnimation.isAnimating = true
     
-    print("|cff00ff00Starting selection animation...|r")
+    if self.debugMode then
+        print("|cff00ff00Starting selection animation...|r")
+    end
     
     -- Get UI elements
     local scrollFrame = (self.ui and self.ui.keystoneList) or MythicDungeonWheelFrameKeystoneList
@@ -1340,7 +1710,9 @@ function MDW:StartScrollingAnimation(keystoneList)
     local selectedText = (self.ui and self.ui.selectedKeystoneText) or MythicDungeonWheelFrameSelectedKeystoneText
     
     if not scrollFrame or not content or not content.buttons then
-        print("|cffff0000Animation UI not available.|r")
+        if self.debugMode then
+            print("|cffff0000Animation UI not available.|r")
+        end
         self:FinishScrollingAnimation()
         return
     end
@@ -1398,7 +1770,9 @@ function MDW:StartScrollingAnimation(keystoneList)
     end
     
     if #sessionKeystones == 0 then
-        print("|cffff0000No session keystones available for animation.|r")
+        if self.debugMode then
+            print("|cffff0000No session keystones available for animation.|r")
+        end
         self:FinishScrollingAnimation()
         return
     end
@@ -1425,12 +1799,12 @@ function MDW:StartScrollingAnimation(keystoneList)
     end
     
     -- Calculate total steps needed to land on the winner
-    local animationDuration = 12.0 -- 12 seconds total for longer dramatic feel
+    local animationDuration = 10.0 -- 10 seconds total for good dramatic feel
     local minCycles = 5 -- At least 5 full cycles through the list
     local totalSteps = minCycles * #sessionKeystones + (targetPosition - 1)
     
     -- Debug output
-    print("MDW Debug: animationDuration=" .. animationDuration .. ", totalSteps=" .. totalSteps .. ", keystones=" .. #sessionKeystones)
+    self:DebugPrint("MDW Debug: animationDuration=" .. animationDuration .. ", totalSteps=" .. totalSteps .. ", keystones=" .. #sessionKeystones)
     
     -- Animation parameters
     local startTime = GetTime()
@@ -1441,11 +1815,17 @@ function MDW:StartScrollingAnimation(keystoneList)
     local function AnimationTick()
         local currentTime = GetTime()
         
+        -- Safety check: Stop animation if it was reset/stopped externally
+        if not self.scrollingAnimation.isAnimating then
+            self:DebugPrint("MDW Debug: Animation stopped externally, halting timer")
+            return
+        end
+        
         -- Calculate current speed based on progress (smooth gradual slowdown throughout)
         local progress = currentStep / totalSteps
         
-        -- Calculate next timer interval with linear progression - steady consistent slowdown, slightly faster overall
-        local nextInterval = 0.008 + progress * 0.8 -- 0.008s to 0.8s with linear curve
+        -- Calculate next timer interval with linear progression - steady consistent slowdown, faster overall
+        local nextInterval = 0.005 + progress * 0.5 -- 0.005s to 0.5s with linear curve
         
         currentStep = currentStep + 1
         
@@ -1472,13 +1852,13 @@ function MDW:StartScrollingAnimation(keystoneList)
             currentHighlightIndex = 1 -- Cycle back to the top
         end
         
-        -- Apply green highlight to current keystone (try real UI button first, then fall back to bg)
+        -- Apply yellow highlight to current keystone (try real UI button first, then fall back to bg)
         local currentButton = sessionKeystones[currentHighlightIndex]
         if currentButton then
             if currentButton.realUIButton and currentButton.realUIButton.bg then
-                currentButton.realUIButton.bg:SetColorTexture(0.2, 0.8, 0.2, 0.9) -- Green highlight
+                currentButton.realUIButton.bg:SetColorTexture(0.8, 0.6, 0.2, 0.9) -- Yellow highlight
             elseif currentButton.bg and currentButton.bg.SetColorTexture then
-                currentButton.bg:SetColorTexture(0.2, 0.8, 0.2, 0.9) -- Green highlight
+                currentButton.bg:SetColorTexture(0.8, 0.6, 0.2, 0.9) -- Yellow highlight
             end
         end
         
@@ -1500,8 +1880,8 @@ function MDW:StartScrollingAnimation(keystoneList)
         
         -- Add safety check - if animation runs too long, force completion
         local elapsedTime = currentTime - startTime
-        if elapsedTime > 18.0 then -- 18 second maximum safety limit (longer than expected 12s)
-            print("MDW Debug: Animation safety timeout reached, finishing")
+        if elapsedTime > 15.0 then -- 15 second maximum safety limit (longer than expected 10s)
+            self:DebugPrint("MDW Debug: Animation safety timeout reached, finishing")
             self:FinishScrollingAnimation()
             return
         end
@@ -1514,13 +1894,23 @@ function MDW:StartScrollingAnimation(keystoneList)
 end
 
 function MDW:FinishScrollingAnimation()
+    -- Check if animation was already stopped (e.g., by reset)
+    if not self.scrollingAnimation.isAnimating then
+        self:DebugPrint("MDW Debug: Animation already stopped, skipping finish")
+        return
+    end
+    
     if not self.scrollingAnimation.selectedKeystone then
-        print("|cffff0000No keystone selected.|r")
+        if self.debugMode then
+            print("|cffff0000No keystone selected.|r")
+        end
+        self.scrollingAnimation.isAnimating = false
         return
     end
     
     local selectedKeystone = self.scrollingAnimation.selectedKeystone
     self.session.selectedKeystone = selectedKeystone
+    self.session.selectedKeystoneRemoved = false -- Reset the removed flag when a new winner is selected
     self.scrollingAnimation.isAnimating = false
     
     -- Clear the snapshot since animation is done
@@ -1539,8 +1929,8 @@ function MDW:FinishScrollingAnimation()
                    button.keystone.player == selectedKeystone.player and
                    button.keystone.level == selectedKeystone.level and
                    button.keystone.dungeon == selectedKeystone.dungeon then
-                    -- This is our winner - make it gold
-                    button.bg:SetColorTexture(0.8, 0.6, 0.2, 0.9) -- Gold highlight for final selection
+                    -- This is our winner - make it green
+                    button.bg:SetColorTexture(0.2, 0.8, 0.2, 0.9) -- Green highlight for final selection
                 else
                     -- Reset all others to gray
                     button.bg:SetColorTexture(0.2, 0.2, 0.2, 0.8)
@@ -1572,6 +1962,528 @@ function MDW:FinishScrollingAnimation()
         isTest = tostring(selectedKeystone.isTest or false)
     })
     
-    print("|cff00ff00Keystone selected:|r " .. selectedKeystone.player .. "'s +" .. selectedKeystone.level .. " " .. selectedKeystone.dungeon)
+    if self.debugMode then
+        print("|cff00ff00Keystone selected:|r " .. selectedKeystone.player .. "'s +" .. selectedKeystone.level .. " " .. selectedKeystone.dungeon)
+    end
+    
+    -- Start voting process
+    self:StartVoting()
+    
     self:UpdateInterface()
+end
+
+-- Voting System Functions
+function MDW:StartVoting()
+    -- In debug mode, always show voting UI even when solo
+    if not IsInGroup() and not self.debugMode then
+        -- Solo player - automatically complete the key
+        self:CompleteKey()
+        return
+    end
+    
+    -- Reset voting state
+    self.session.voting.active = true
+    self.session.voting.votes = {}
+    self.session.voting.voteCount = 0
+    self.session.voting.totalVotes = 0
+    
+    -- Calculate total members who can vote
+    local groupSize
+    if IsInGroup() then
+        groupSize = GetNumGroupMembers()
+    elseif self.debugMode then
+        -- In debug mode, use actual session participants + test players
+        groupSize = self:GetSessionMemberCount()
+    else
+        groupSize = 1
+    end
+    self.session.voting.totalMembers = groupSize
+    
+    -- Show voting UI
+    self:ShowVotingUI()
+
+    -- Start 30-second timer
+    self.session.voting.timeLeft = 30
+    self:StartVotingTimer()
+
+    -- Notify group about voting (skip in solo debug mode)
+    if IsInGroup() then
+        self:SendMessage("VOTING_STARTED", {
+            totalMembers = tostring(groupSize)
+        })
+    end
+
+    self:DebugPrint("Voting started - 30 seconds for " .. groupSize .. " members to vote")
+end
+
+function MDW:GetSessionMemberCount()
+    -- Count unique players in the session
+    local uniquePlayers = {}
+    for key, keystone in pairs(self.session.keystones) do
+        if keystone.player then
+            uniquePlayers[keystone.player] = true
+        end
+    end
+    
+    local sessionCount = 0
+    for _ in pairs(uniquePlayers) do
+        sessionCount = sessionCount + 1
+    end
+    
+    -- In debug mode when solo, simulate a 5-player group for testing
+    if self.debugMode and not IsInGroup() then
+        self:DebugPrint("Debug mode: Using simulated 5-player group (1 real + 4 test)")
+        return 5 -- Always 5 for debug testing
+    end
+    
+    -- Normal mode: return actual session participant count
+    self:DebugPrint("Normal mode: " .. sessionCount .. " real session players")
+    return sessionCount
+end
+
+function MDW:StartVotingTimer()
+    if self.session.voting.timer then
+        self.session.voting.timer:Cancel()
+    end
+    
+    -- Initialize test voting simulation for debug mode
+    if self.debugMode and not IsInGroup() then
+        self:InitializeTestVoting()
+    end
+    
+    self.session.voting.timer = C_Timer.NewTicker(1, function()
+        if not self.session.voting.active then
+            if self.session.voting.timer then
+                self.session.voting.timer:Cancel()
+                self.session.voting.timer = nil
+            end
+            return
+        end
+        
+        self.session.voting.timeLeft = self.session.voting.timeLeft - 1
+        
+        -- Update timer display
+        self:UpdateVotingTimer()
+        
+        -- In debug mode, simulate random test votes
+        if self.debugMode and not IsInGroup() then
+            self:SimulateTestVotes()
+        end
+        
+        if self.session.voting.timeLeft <= 0 then
+            -- Time's up, complete voting
+            self:CompleteVoting()
+        end
+    end)
+end
+
+function MDW:InitializeTestVoting()
+    -- This function should only be called in debug mode when solo
+    if not self.debugMode or IsInGroup() then
+        self:DebugPrint("InitializeTestVoting called incorrectly - not in debug mode or in group")
+        return
+    end
+    
+    -- In debug mode when solo, always create test players for a 5-person simulation
+    local sessionPlayerCount = 1 -- You (the real player)
+    local testPlayerCount = 4    -- Always 4 test players in debug mode
+    
+    self:DebugPrint("Debug mode: Forcing 1 real player + 4 test players for voting simulation")
+    self:DebugPrint("Session keystones count: " .. self:CountSessionKeystones())
+    
+    -- Create a list of test players
+    local testPlayerNames = {"TestWarrior", "TestMage", "TestPriest", "TestRogue"}
+    self.session.voting.testPlayers = {}
+    
+    for i = 1, testPlayerCount do
+        table.insert(self.session.voting.testPlayers, testPlayerNames[i])
+        self:DebugPrint("Added test player: " .. testPlayerNames[i])
+    end
+    
+    self:DebugPrint("Final test players count: " .. #self.session.voting.testPlayers)
+end
+
+function MDW:CountSessionKeystones()
+    local count = 0
+    for _ in pairs(self.session.keystones) do
+        count = count + 1
+    end
+    return count
+end
+
+function MDW:SimulateTestVotes()
+    self:DebugPrint("SimulateTestVotes called - testPlayers exists: " .. tostring(self.session.voting.testPlayers ~= nil))
+    
+    if self.session.voting.testPlayers then
+        self:DebugPrint("testPlayers count: " .. #self.session.voting.testPlayers)
+        for i, player in ipairs(self.session.voting.testPlayers) do
+            self:DebugPrint("  Test player " .. i .. ": " .. player)
+        end
+    end
+    
+    if not self.session.voting.testPlayers or #self.session.voting.testPlayers == 0 then
+        self:DebugPrint("No test players available to vote")
+        return
+    end
+    
+    self:DebugPrint("Simulating votes for " .. #self.session.voting.testPlayers .. " test players")
+    
+    -- Higher chance for a test player to vote each second (about 50% chance)
+    if math.random(100) <= 50 then
+        -- Pick a random test player who hasn't voted yet
+        local playerIndex = math.random(#self.session.voting.testPlayers)
+        local playerName = self.session.voting.testPlayers[playerIndex]
+        
+        -- Remove this player from the list
+        table.remove(self.session.voting.testPlayers, playerIndex)
+        
+        -- Cast a random vote (60% chance for Yes, 40% chance for No)
+        local vote = math.random(100) <= 60
+        
+        self:DebugPrint("Test player " .. playerName .. " is about to vote: " .. (vote and "Yes" or "No"))
+        
+        -- Simulate receiving their vote
+        self:ProcessTestVote(playerName, vote)
+    else
+        self:DebugPrint("No test player voted this second (random chance)")
+    end
+end
+
+function MDW:ProcessTestVote(playerName, vote)
+    -- Add to votes tracking
+    self.session.voting.votes[playerName] = vote
+    self.session.voting.voteCount = self.session.voting.voteCount + 1
+    self.session.voting.totalVotes = self.session.voting.totalVotes + (vote and 1 or 0)
+    
+    -- Update UI
+    self:UpdateVotingProgress()
+    
+    local voteText = vote and "Yes" or "No"
+    self:DebugPrint(playerName .. " voted: " .. voteText .. " (" .. self.session.voting.voteCount .. "/" .. self.session.voting.totalMembers .. ")")
+    
+    -- Check if voting should complete early (all members voted)
+    if self.session.voting.voteCount >= self.session.voting.totalMembers then
+        C_Timer.After(1, function() -- Small delay to see the final vote
+            self:CompleteVoting()
+        end)
+    end
+end
+
+function MDW:ShowVotingUI()
+    local votingDivider = MythicDungeonWheelFrameVotingDivider
+    local votingTimer = MythicDungeonWheelFrameVotingTimer
+    local votingTitle = MythicDungeonWheelFrameVotingTitle
+    local progressFrame = MythicDungeonWheelFrameVotingProgress
+    local yesButton = MythicDungeonWheelFrameVoteYesButton
+    local noButton = MythicDungeonWheelFrameVoteNoButton
+    local progressText = MythicDungeonWheelFrameVotingProgressText
+    local resultFrame = MythicDungeonWheelFrameVoteResult
+    
+    self:DebugPrint("ShowVotingUI called")
+    self:DebugPrint("Voting divider exists: " .. tostring(votingDivider ~= nil))
+    self:DebugPrint("Voting timer exists: " .. tostring(votingTimer ~= nil))
+    self:DebugPrint("Voting title exists: " .. tostring(votingTitle ~= nil))
+    self:DebugPrint("Progress frame exists: " .. tostring(progressFrame ~= nil))
+    self:DebugPrint("Yes button exists: " .. tostring(yesButton ~= nil))
+    self:DebugPrint("No button exists: " .. tostring(noButton ~= nil))
+    
+    if votingDivider then
+        votingDivider:Show()
+        self:DebugPrint("Voting divider shown")
+    end
+    
+    if votingTimer then
+        votingTimer:Show()
+        self:UpdateVotingTimer()
+        self:DebugPrint("Voting timer shown")
+    end
+    
+    if votingTitle then
+        votingTitle:Show()
+        self:DebugPrint("Voting title shown")
+    end
+    
+    if progressFrame then
+        progressFrame:Show()
+        self:DebugPrint("Progress frame shown")
+    end
+    
+    if yesButton then
+        yesButton:Show()
+        yesButton:SetEnabled(true)
+        self:DebugPrint("Yes button shown")
+    end
+    
+    if noButton then
+        noButton:Show()
+        noButton:SetEnabled(true)
+        self:DebugPrint("No button shown")
+    end
+    
+    if resultFrame then
+        resultFrame:Hide()
+    end
+    
+    self:UpdateVotingProgress()
+    
+    -- Adjust window height when voting UI is shown
+    self:AdjustWindowHeight()
+end
+
+function MDW:UpdateVotingTimer()
+    local timerText = MythicDungeonWheelFrameVotingTimerText
+    if timerText and self.session.voting.active then
+        timerText:SetText("Time remaining to vote: " .. self.session.voting.timeLeft)
+    end
+end
+
+function MDW:UpdateVotingProgress()
+    local progressText = MythicDungeonWheelFrameVotingProgressText
+    local progressBar = MythicDungeonWheelFrameVotingProgressBar
+    local progressFrame = MythicDungeonWheelFrameVotingProgress
+    
+    if progressText then
+        progressText:SetText(self.session.voting.voteCount .. "/" .. self.session.voting.totalMembers .. " Votes")
+    end
+    
+    if progressBar and progressFrame then
+        local progress = 0
+        if self.session.voting.totalMembers > 0 then
+            progress = self.session.voting.voteCount / self.session.voting.totalMembers
+        end
+        local maxWidth = progressFrame:GetWidth() - 4 -- Account for borders
+        progressBar:SetWidth(maxWidth * progress)
+    end
+end
+
+function MDW:HideVotingUI()
+    local votingDivider = MythicDungeonWheelFrameVotingDivider
+    local votingTimer = MythicDungeonWheelFrameVotingTimer
+    local votingTitle = MythicDungeonWheelFrameVotingTitle
+    local progressFrame = MythicDungeonWheelFrameVotingProgress
+    local yesButton = MythicDungeonWheelFrameVoteYesButton
+    local noButton = MythicDungeonWheelFrameVoteNoButton
+    local resultFrame = MythicDungeonWheelFrameVoteResult
+    
+    if votingDivider then
+        votingDivider:Hide()
+    end
+    
+    if votingTimer then
+        votingTimer:Hide()
+    end
+    
+    if votingTitle then
+        votingTitle:Hide()
+    end
+    
+    if progressFrame then
+        progressFrame:Hide()
+    end
+    
+    if yesButton then
+        yesButton:Hide()
+    end
+    
+    if noButton then
+        noButton:Hide()
+    end
+    
+    if resultFrame then
+        resultFrame:Hide()
+    end
+    
+    -- Adjust window height when voting UI is hidden
+    self:AdjustWindowHeight()
+end
+
+function MDW:AdjustWindowHeight()
+    local mainFrame = MythicDungeonWheelFrame
+    if not mainFrame then
+        return
+    end
+    
+    -- Check if voting UI is active
+    local votingDivider = MythicDungeonWheelFrameVotingDivider
+    local isVotingActive = votingDivider and votingDivider:IsShown()
+    
+    if isVotingActive then
+        -- Full height when voting is active (includes voting UI)
+        mainFrame:SetHeight(650)
+        self:DebugPrint("Window height set to 650 (voting active)")
+    else
+        -- Compact height when voting is not active (but still room for content)
+        mainFrame:SetHeight(550)
+        self:DebugPrint("Window height set to 550 (voting inactive)")
+    end
+end
+
+function MDW:CastVote(vote)
+    if not self.session.voting.active then
+        return
+    end
+    
+    local playerName = UnitName("player")
+    
+    -- Prevent double voting
+    if self.session.voting.votes[playerName] ~= nil then
+        self:DebugPrint("You have already voted!")
+        return
+    end
+    
+    -- Record vote
+    self.session.voting.votes[playerName] = vote
+    self.session.voting.voteCount = self.session.voting.voteCount + 1
+    
+    if vote then
+        self.session.voting.totalVotes = self.session.voting.totalVotes + 1
+    end
+    
+    -- Disable voting buttons for this player
+    local yesButton = MythicDungeonWheelFrameVoteYesButton
+    local noButton = MythicDungeonWheelFrameVoteNoButton
+    if yesButton then yesButton:SetEnabled(false) end
+    if noButton then noButton:SetEnabled(false) end
+    
+    -- Update UI
+    self:UpdateVotingProgress()
+    
+    local voteText = vote and "Yes" or "No"
+    self:DebugPrint("You voted: " .. voteText .. " (" .. self.session.voting.voteCount .. "/" .. self.session.voting.totalMembers .. ")")
+    
+    -- Notify group (skip in debug solo mode)
+    if IsInGroup() then
+        self:SendMessage("VOTE_CAST", {
+            player = playerName,
+            vote = tostring(vote),
+            voteCount = tostring(self.session.voting.voteCount),
+            totalVotes = tostring(self.session.voting.totalVotes),
+        totalMembers = tostring(self.session.voting.totalMembers)
+        })
+    end
+    
+    -- Check if all members have voted
+    if self.session.voting.voteCount >= self.session.voting.totalMembers then
+        C_Timer.After(1, function() -- Small delay to see the final vote
+            self:CompleteVoting()
+        end)
+    end
+end
+
+function MDW:CompleteVoting()
+    if not self.session.voting.active then
+        return
+    end
+    
+    -- Cancel timer
+    if self.session.voting.timer then
+        self.session.voting.timer:Cancel()
+        self.session.voting.timer = nil
+    end
+    
+    self.session.voting.active = false
+    
+    -- Calculate result - majority needed for yes, non-voters count as no
+    local yesVotes = self.session.voting.totalVotes
+    local totalMembers = self.session.voting.totalMembers
+    local majority = math.ceil(totalMembers / 2)
+    local passed = yesVotes >= majority
+    
+    -- Calculate no votes for debug output
+    local noVotes = self.session.voting.voteCount - yesVotes
+    local nonVoters = totalMembers - self.session.voting.voteCount
+    
+    self:DebugPrint("Vote Results: " .. yesVotes .. " Yes, " .. noVotes .. " No, " .. nonVoters .. " didn't vote")
+    self:DebugPrint("Majority needed: " .. majority .. "/" .. totalMembers .. " - Result: " .. (passed and "PASSED" or "FAILED"))
+    
+    -- Track group decision for statistics (only for session owner to avoid duplicates)
+    if self.session.isOwner then
+        if passed then
+            MythicDungeonWheelDB.statistics.yesVotes = MythicDungeonWheelDB.statistics.yesVotes + 1
+            self:DebugPrint("Group obeyed the wheel - stats updated")
+        else
+            MythicDungeonWheelDB.statistics.noVotes = MythicDungeonWheelDB.statistics.noVotes + 1
+            self:DebugPrint("Group disobeyed the wheel - stats updated")
+        end
+        self:DebugPrint("Lifetime group decisions: " .. MythicDungeonWheelDB.statistics.yesVotes .. " Obeyed, " .. MythicDungeonWheelDB.statistics.noVotes .. " Disobeyed")
+        
+        -- Broadcast statistics update to all group members
+        if IsInGroup() then
+            self:SendMessage("STATS_UPDATE", {
+                passed = tostring(passed),
+                yesVotes = tostring(MythicDungeonWheelDB.statistics.yesVotes),
+                noVotes = tostring(MythicDungeonWheelDB.statistics.noVotes)
+            })
+        end
+    end
+    
+    -- Hide voting buttons
+    local yesButton = MythicDungeonWheelFrameVoteYesButton
+    local noButton = MythicDungeonWheelFrameVoteNoButton
+    if yesButton then yesButton:Hide() end
+    if noButton then noButton:Hide() end
+    
+    -- Update timer text to show "Finished"
+    local timerText = MythicDungeonWheelFrameVotingTimerText
+    if timerText then
+        timerText:SetText("Time remaining to vote: Finished")
+    end
+    
+    -- Show result
+    local resultFrame = MythicDungeonWheelFrameVoteResult
+    local resultText = MythicDungeonWheelFrameVoteResultText
+    if resultFrame and resultText then
+        resultFrame:Show()
+        if passed then
+            resultText:SetText("Vote: |cff00ff00Yes|r") -- Green "Yes"
+            self:CompleteKey()
+        else
+            resultText:SetText("Vote: |cffff0000No|r") -- Red "No"
+        end
+    end
+    
+    self:DebugPrint("Voting complete - " .. (passed and "PASSED" or "FAILED") .. " (" .. yesVotes .. "/" .. totalMembers .. ")")
+    
+    -- Start auto-reset timer (1 minute) - only for session owner
+    if self.session.isOwner then
+        self.session.autoResetTimer = C_Timer.NewTimer(60, function()
+            self:DebugPrint("Auto-resetting session after 1 minute...")
+            self:ResetSession()
+        end)
+        self:DebugPrint("Auto-reset timer started - session will reset in 1 minute")
+    end
+    
+    -- Notify group
+    self:SendMessage("VOTING_COMPLETE", {
+        passed = tostring(passed),
+        yesVotes = tostring(yesVotes),
+        totalMembers = tostring(totalMembers)
+    })
+end
+
+function MDW:CompleteKey()
+    if not self.session.selectedKeystone then
+        return
+    end
+    
+    local keystone = self.session.selectedKeystone
+    local completedKey = {
+        player = keystone.player,
+        level = keystone.level,
+        dungeon = keystone.dungeon,
+        timestamp = time(),
+        date = date("%Y-%m-%d %H:%M:%S")
+    }
+    
+    -- Add to statistics
+    table.insert(MythicDungeonWheelDB.statistics.completedKeys, completedKey)
+    MythicDungeonWheelDB.statistics.totalCompleted = MythicDungeonWheelDB.statistics.totalCompleted + 1
+    
+    self:DebugPrint("Key completed and recorded! Total completed: " .. MythicDungeonWheelDB.statistics.totalCompleted)
+    
+    -- Show completion message
+    if self.debugMode then
+        print("|cff00ff00Key Completed!|r " .. keystone.dungeon)
+        print("|cff00ff00Total wheel decisions completed: " .. MythicDungeonWheelDB.statistics.totalCompleted .. "|r")
+    end
 end

@@ -1,11 +1,15 @@
 ## Interface: 110002
 ## Title: Mythic Dungeon Wheel
 ## Notes: Random keystone selector for groups
-## Author: Your Name
+## Author: Sentex
 ## Version: 1.0.0
 ## SavedVariables: MythicDungeonWheelDB
 ## OptionalDeps: LibStub, LibDataBroker-1.1, LibDBIcon-1.0
 
+Libs\LibStub.lua
+Libs\CallbackHandler-1.0.lua
+Libs\LibDataBroker-1.1.lua
+Libs\LibDBIcon-1.0.lua
+
 MythicDungeonWheel.lua
 MythicDungeonWheel.xml
-TestScrolling.lua

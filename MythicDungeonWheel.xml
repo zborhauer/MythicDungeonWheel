@@ -2,7 +2,7 @@
     
     <!-- Main Frame -->
     <Frame name="MythicDungeonWheelFrame" parent="UIParent" movable="true" enableMouse="true" clampedToScreen="true" hidden="true" inherits="BackdropTemplate">
-        <Size x="500" y="500"/>
+        <Size x="500" y="650"/>
         <Anchors>
             <Anchor point="CENTER"/>
         </Anchors>
@@ -97,7 +97,7 @@
             <Frame name="MythicDungeonWheelFrameSelectionLabel">
                 <Size x="450" y="20"/>
                 <Anchors>
-                    <Anchor point="TOP" relativePoint="BOTTOM" relativeTo="MythicDungeonWheelFrameKeystoneList" x="0" y="-5"/>
+                    <Anchor point="TOP" relativePoint="BOTTOM" relativeTo="MythicDungeonWheelFrameKeystoneList" x="0" y="-25"/>
                 </Anchors>
                 
                 <Scripts>
@@ -131,7 +131,7 @@
                             edgeSize = 16,
                             insets = { left = 2, right = 2, top = 2, bottom = 2 }
                         })
-                        self:SetBackdropColor(0, 0.5, 0, 0.8)
+                        self:SetBackdropColor(0, 0, 0, 0.8)
                         
                         -- Create text programmatically
                         self.text = self:CreateFontString("MythicDungeonWheelFrameSelectedKeystoneText", "OVERLAY", "GameFontNormalLarge")
@@ -146,9 +146,9 @@
             
             <!-- Buttons -->
             <Button name="MythicDungeonWheelFrameStartButton" inherits="UIPanelButtonTemplate" text="Start Session" hidden="true">
-                <Size x="100" y="25"/>
+                <Size x="160" y="40"/>
                 <Anchors>
-                    <Anchor point="BOTTOMLEFT" x="20" y="20"/>
+                    <Anchor point="CENTER" x="0" y="0"/>
                 </Anchors>
                 <Scripts>
                     <OnClick>
@@ -191,7 +191,7 @@
             <Button name="MythicDungeonWheelFrameTestButton" inherits="UIPanelButtonTemplate" text="Toggle Test" hidden="true">
                 <Size x="80" y="20"/>
                 <Anchors>
-                    <Anchor point="BOTTOMLEFT" x="20" y="50"/>
+                    <Anchor point="BOTTOMLEFT" x="20" y="80"/>
                 </Anchors>
                 <Scripts>
                     <OnClick>
@@ -201,6 +201,243 @@
                     </OnClick>
                 </Scripts>
             </Button>
+            
+            <!-- Party Required Text -->
+            <Frame name="MythicDungeonWheelFramePartyRequiredFrame">
+                <Size x="400" y="80"/>
+                <Anchors>
+                    <Anchor point="CENTER" x="0" y="0"/>
+                </Anchors>
+                <Scripts>
+                    <OnLoad>
+                        -- Create text element
+                        self.text = self:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+                        self.text:SetAllPoints()
+                        self.text:SetText("Mythic Dungeon Wheel is only usable in a party.")
+                        self.text:SetJustifyH("CENTER")
+                        self.text:SetJustifyV("MIDDLE")
+                        self.text:SetTextColor(1, 1, 1, 0.8) -- White with slight transparency
+                        
+                        -- Make text globally accessible
+                        _G["MythicDungeonWheelFramePartyRequiredText"] = self.text
+                        
+                        -- Hide by default
+                        self:Hide()
+                    </OnLoad>
+                </Scripts>
+            </Frame>
+            
+            <!-- Voting Divider -->
+            <Frame name="MythicDungeonWheelFrameVotingDivider">
+                <Size x="450" y="3"/>
+                <Anchors>
+                    <Anchor point="TOP" relativePoint="BOTTOM" relativeTo="MythicDungeonWheelFrameSelectedKeystone" x="0" y="-10"/>
+                </Anchors>
+                <Scripts>
+                    <OnLoad>
+                        -- Create divider line
+                        self.line = self:CreateTexture(nil, "ARTWORK")
+                        self.line:SetAllPoints(self)
+                        self.line:SetColorTexture(0.5, 0.5, 0.5, 0.6) -- Light gray with some transparency
+                        
+                        -- Make globally accessible
+                        _G["MythicDungeonWheelFrameVotingDivider"] = self
+                        
+                        -- Hide by default
+                        self:Hide()
+                    </OnLoad>
+                </Scripts>
+            </Frame>
+            
+            <!-- Voting Timer -->
+            <Frame name="MythicDungeonWheelFrameVotingTimer">
+                <Size x="400" y="20"/>
+                <Anchors>
+                    <Anchor point="TOP" relativePoint="BOTTOM" relativeTo="MythicDungeonWheelFrameVotingDivider" x="0" y="-10"/>
+                </Anchors>
+                <Scripts>
+                    <OnLoad>
+                        -- Create timer text
+                        self.text = self:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+                        self.text:SetPoint("CENTER")
+                        self.text:SetText("Time remaining to vote: 30")
+                        self.text:SetTextColor(1, 1, 0, 1) -- Yellow text for visibility
+                        
+                        -- Make globally accessible
+                        _G["MythicDungeonWheelFrameVotingTimer"] = self
+                        _G["MythicDungeonWheelFrameVotingTimerText"] = self.text
+                        
+                        -- Hide by default
+                        self:Hide()
+                    </OnLoad>
+                </Scripts>
+            </Frame>
+            
+            <!-- Voting Title -->
+            <Frame name="MythicDungeonWheelFrameVotingTitle">
+                <Size x="400" y="20"/>
+                <Anchors>
+                    <Anchor point="TOP" relativePoint="BOTTOM" relativeTo="MythicDungeonWheelFrameVotingTimer" x="0" y="-10"/>
+                </Anchors>
+                <Scripts>
+                    <OnLoad>
+                        -- Create title text
+                        self.text = self:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+                        self.text:SetPoint("CENTER")
+                        self.text:SetText("Players voted:")
+                        self.text:SetTextColor(1, 1, 1, 1) -- White text like "Selected:"
+                        
+                        -- Make globally accessible
+                        _G["MythicDungeonWheelFrameVotingTitle"] = self
+                        _G["MythicDungeonWheelFrameVotingTitleText"] = self.text
+                        
+                        -- Hide by default
+                        self:Hide()
+                    </OnLoad>
+                </Scripts>
+            </Frame>
+            
+            <!-- Voting Progress Bar -->
+            <Frame name="MythicDungeonWheelFrameVotingProgress" inherits="BackdropTemplate">
+                <Size x="400" y="20"/>
+                <Anchors>
+                    <Anchor point="TOP" relativePoint="BOTTOM" relativeTo="MythicDungeonWheelFrameVotingTitle" x="0" y="-5"/>
+                </Anchors>
+                <Scripts>
+                    <OnLoad>
+                        -- Set backdrop
+                        self:SetBackdrop({
+                            bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
+                            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+                            tile = true,
+                            tileSize = 16,
+                            edgeSize = 16,
+                            insets = { left = 2, right = 2, top = 2, bottom = 2 }
+                        })
+                        self:SetBackdropColor(0.2, 0.2, 0.2, 0.8)
+                        
+                        -- Create progress bar
+                        self.progressBar = self:CreateTexture(nil, "ARTWORK")
+                        self.progressBar:SetPoint("TOPLEFT", self, "TOPLEFT", 2, -2)
+                        self.progressBar:SetPoint("BOTTOMLEFT", self, "BOTTOMLEFT", 2, 2)
+                        self.progressBar:SetWidth(0)
+                        self.progressBar:SetColorTexture(0.2, 0.8, 0.2, 0.8) -- Green progress
+                        
+                        -- Create vote count text
+                        self.voteText = self:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+                        self.voteText:SetPoint("CENTER")
+                        self.voteText:SetText("0/0 Votes")
+                        self.voteText:SetTextColor(1, 1, 1, 1)
+                        
+                        -- Make globally accessible
+                        _G["MythicDungeonWheelFrameVotingProgress"] = self
+                        _G["MythicDungeonWheelFrameVotingProgressBar"] = self.progressBar
+                        _G["MythicDungeonWheelFrameVotingProgressText"] = self.voteText
+                        
+                        -- Hide by default
+                        self:Hide()
+                    </OnLoad>
+                </Scripts>
+            </Frame>
+            
+            <!-- Vote Yes Button -->
+            <Button name="MythicDungeonWheelFrameVoteYesButton" inherits="UIPanelButtonTemplate" text="Yes" hidden="true">
+                <Size x="80" y="30"/>
+                <Anchors>
+                    <Anchor point="TOP" relativePoint="BOTTOM" relativeTo="MythicDungeonWheelFrameVotingProgress" x="-50" y="-10"/>
+                </Anchors>
+                <Scripts>
+                    <OnClick>
+                        if MythicDungeonWheel then
+                            MythicDungeonWheel:CastVote(true)
+                        end
+                    </OnClick>
+                </Scripts>
+            </Button>
+            
+            <!-- Vote No Button -->
+            <Button name="MythicDungeonWheelFrameVoteNoButton" inherits="UIPanelButtonTemplate" text="No" hidden="true">
+                <Size x="80" y="30"/>
+                <Anchors>
+                    <Anchor point="TOP" relativePoint="BOTTOM" relativeTo="MythicDungeonWheelFrameVotingProgress" x="50" y="-10"/>
+                </Anchors>
+                <Scripts>
+                    <OnClick>
+                        if MythicDungeonWheel then
+                            MythicDungeonWheel:CastVote(false)
+                        end
+                    </OnClick>
+                </Scripts>
+            </Button>
+            
+            <!-- Vote Result Text -->
+            <Frame name="MythicDungeonWheelFrameVoteResult">
+                <Size x="400" y="30"/>
+                <Anchors>
+                    <Anchor point="TOP" relativePoint="BOTTOM" relativeTo="MythicDungeonWheelFrameVotingProgress" x="0" y="-50"/>
+                </Anchors>
+                <Scripts>
+                    <OnLoad>
+                        -- Create result text
+                        self.resultText = self:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+                        self.resultText:SetPoint("CENTER")
+                        self.resultText:SetText("")
+                        self.resultText:SetTextColor(1, 1, 0, 1) -- Yellow text
+                        
+                        -- Make globally accessible
+                        _G["MythicDungeonWheelFrameVoteResult"] = self
+                        _G["MythicDungeonWheelFrameVoteResultText"] = self.resultText
+                        
+                        -- Hide by default
+                        self:Hide()
+                    </OnLoad>
+                </Scripts>
+            </Frame>
+            
+            <!-- Voting Statistics -->
+            <Frame name="MythicDungeonWheelFrameVotingStats">
+                <Size x="400" y="40"/>
+                <Anchors>
+                    <Anchor point="BOTTOM" relativePoint="BOTTOM" x="0" y="150"/>
+                </Anchors>
+                <Scripts>
+                    <OnLoad>
+                        -- Create text element
+                        self.text = self:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+                        self.text:SetAllPoints()
+                        self.text:SetText("You have obeyed the wheel: 0 times\nYou have disobeyed the wheel: 0 times")
+                        self.text:SetJustifyH("CENTER")
+                        self.text:SetJustifyV("MIDDLE")
+                        self.text:SetTextColor(1, 1, 1, 1) -- White text
+                        
+                        -- Make text globally accessible
+                        _G["MythicDungeonWheelFrameVotingStats"] = self
+                        _G["MythicDungeonWheelFrameVotingStatsText"] = self.text
+                    </OnLoad>
+                </Scripts>
+            </Frame>
+            
+            <!-- Addon Author Credit -->
+            <Frame name="MythicDungeonWheelFrameAuthorFrame">
+                <Size x="200" y="40"/>
+                <Anchors>
+                    <Anchor point="BOTTOMLEFT" x="20" y="20"/>
+                </Anchors>
+                <Scripts>
+                    <OnLoad>
+                        -- Create text element
+                        self.text = self:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
+                        self.text:SetAllPoints()
+                        self.text:SetText("Addon Author:\nSentex\nTwitch.tv/LittleSentex")
+                        self.text:SetJustifyH("LEFT")
+                        self.text:SetJustifyV("BOTTOM")
+                        self.text:SetTextColor(1, 1, 1, 0.8) -- Same color as party required text
+                        
+                        -- Make text globally accessible
+                        _G["MythicDungeonWheelFrameAuthorText"] = self.text
+                    </OnLoad>
+                </Scripts>
+            </Frame>
         </Frames>
     </Frame>
     
