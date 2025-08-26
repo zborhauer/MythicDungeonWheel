@@ -2,7 +2,7 @@
     
     <!-- Main Frame -->
     <Frame name="MythicDungeonWheelFrame" parent="UIParent" movable="true" enableMouse="true" clampedToScreen="true" hidden="true" inherits="BackdropTemplate">
-        <Size x="500" y="650"/>
+        <Size x="500" y="550"/>
         <Anchors>
             <Anchor point="CENTER"/>
         </Anchors>
@@ -187,16 +187,16 @@
                 </Scripts>
             </Button>
             
-            <!-- Test Mode Button -->
-            <Button name="MythicDungeonWheelFrameTestButton" inherits="UIPanelButtonTemplate" text="Toggle Test" hidden="true">
-                <Size x="80" y="20"/>
+            <!-- Test Window Button -->
+            <Button name="MythicDungeonWheelFrameTestWindowButton" inherits="UIPanelButtonTemplate" text="Test Window" hidden="true">
+                <Size x="90" y="20"/>
                 <Anchors>
                     <Anchor point="BOTTOMLEFT" x="20" y="80"/>
                 </Anchors>
                 <Scripts>
                     <OnClick>
                         if MythicDungeonWheel then
-                            MythicDungeonWheel:ToggleTestMode()
+                            MythicDungeonWheel:ToggleTestWindow()
                         end
                     </OnClick>
                 </Scripts>
@@ -441,4 +441,456 @@
         </Frames>
     </Frame>
     
+    <!-- Dedicated Testing Window -->
+    <Frame name="MythicDungeonWheelTestFrame" parent="UIParent" movable="true" enableMouse="true" clampedToScreen="true" hidden="true" inherits="BackdropTemplate">
+        <Size x="700" y="500"/>
+        <Anchors>
+            <Anchor point="CENTER" x="300" y="0"/>
+        </Anchors>
+        
+        <Scripts>
+            <OnLoad>
+                self:RegisterForDrag("LeftButton")
+                -- Set backdrop
+                self:SetBackdrop({
+                    bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+                    edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+                    tile = true,
+                    tileSize = 32,
+                    edgeSize = 32,
+                    insets = { left = 11, right = 12, top = 12, bottom = 11 }
+                })
+            </OnLoad>
+            <OnDragStart>
+                self:StartMoving()
+            </OnDragStart>
+            <OnDragStop>
+                self:StopMovingOrSizing()
+            </OnDragStop>
+            <OnShow>
+                if MythicDungeonWheel then
+                    MythicDungeonWheel:UpdateTestInterface()
+                end
+            </OnShow>
+        </Scripts>
+        
+        <Frames>
+            <!-- Title -->
+            <Frame name="MythicDungeonWheelTestFrameTitle">
+                <Size x="550" y="40"/>
+                <Anchors>
+                    <Anchor point="TOP" x="0" y="-15"/>
+                </Anchors>
+                <Scripts>
+                    <OnLoad>
+                        self.text = self:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+                        self.text:SetPoint("CENTER")
+                        self.text:SetText("Mythic Dungeon Wheel - Testing Console")
+                        self.text:SetTextColor(1, 1, 0, 1)
+                    </OnLoad>
+                </Scripts>
+            </Frame>
+            
+            <!-- Close Button -->
+            <Button name="MythicDungeonWheelTestFrameCloseButton" inherits="UIPanelCloseButton">
+                <Anchors>
+                    <Anchor point="TOPRIGHT" x="-5" y="-5"/>
+                </Anchors>
+                <Scripts>
+                    <OnClick>
+                        self:GetParent():Hide()
+                    </OnClick>
+                </Scripts>
+            </Button>
+            
+            <!-- Status Display -->
+            <Frame name="MythicDungeonWheelTestFrameStatus">
+                <Size x="550" y="60"/>
+                <Anchors>
+                    <Anchor point="TOP" x="0" y="-60"/>
+                </Anchors>
+                <Scripts>
+                    <OnLoad>
+                        -- Status text
+                        self.statusText = self:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+                        self.statusText:SetPoint("TOPLEFT", self, "TOPLEFT", 10, -5)
+                        self.statusText:SetPoint("TOPRIGHT", self, "TOPRIGHT", -10, -5)
+                        self.statusText:SetJustifyH("LEFT")
+                        self.statusText:SetText("Status: Ready")
+                        
+                        -- Client list
+                        self.clientText = self:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                        self.clientText:SetPoint("TOPLEFT", self.statusText, "BOTTOMLEFT", 0, -5)
+                        self.clientText:SetPoint("TOPRIGHT", self.statusText, "BOTTOMRIGHT", 0, -5)
+                        self.clientText:SetJustifyH("LEFT")
+                        self.clientText:SetText("Test Clients: None")
+                        
+                        -- Make globally accessible
+                        _G["MythicDungeonWheelTestFrameStatusText"] = self.statusText
+                        _G["MythicDungeonWheelTestFrameClientText"] = self.clientText
+                    </OnLoad>
+                </Scripts>
+            </Frame>
+            
+            <!-- Session Management Section -->
+            <Frame name="MythicDungeonWheelTestFrameSessionSection">
+                <Size x="680" y="120"/>
+                <Anchors>
+                    <Anchor point="TOP" x="0" y="-130"/>
+                </Anchors>
+                <Scripts>
+                    <OnLoad>
+                        -- Section title
+                        self.title = self:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+                        self.title:SetPoint("TOPLEFT", self, "TOPLEFT", 10, -5)
+                        self.title:SetText("Session Management")
+                        self.title:SetTextColor(0.8, 1, 0.8, 1)
+                    </OnLoad>
+                </Scripts>
+                <Frames>
+                    <Button name="MythicDungeonWheelTestStartSessionButton" inherits="UIPanelButtonTemplate" text="Friend Starts Session">
+                        <Size x="150" y="25"/>
+                        <Anchors>
+                            <Anchor point="TOPLEFT" x="20" y="-30"/>
+                        </Anchors>
+                        <Scripts>
+                            <OnClick>
+                                if MythicDungeonWheel then
+                                    MythicDungeonWheel:SimulateClientStartSession("TestFriend")
+                                end
+                            </OnClick>
+                        </Scripts>
+                    </Button>
+                    
+                    <Button name="MythicDungeonWheelTestJoinSessionButton" inherits="UIPanelButtonTemplate" text="Join Session">
+                        <Size x="120" y="25"/>
+                        <Anchors>
+                            <Anchor point="LEFT" relativeTo="MythicDungeonWheelTestStartSessionButton" relativePoint="RIGHT" x="20" y="0"/>
+                        </Anchors>
+                        <Scripts>
+                            <OnClick>
+                                if MythicDungeonWheel then
+                                    local playerName = UnitName("player")
+                                    MythicDungeonWheel:SimulateClientJoin(playerName)
+                                end
+                            </OnClick>
+                        </Scripts>
+                    </Button>
+                    
+                    <Button name="MythicDungeonWheelTestResetAllButton" inherits="UIPanelButtonTemplate" text="Reset All">
+                        <Size x="100" y="25"/>
+                        <Anchors>
+                            <Anchor point="LEFT" relativeTo="MythicDungeonWheelTestJoinSessionButton" relativePoint="RIGHT" x="20" y="0"/>
+                        </Anchors>
+                        <Scripts>
+                            <OnClick>
+                                if MythicDungeonWheel then
+                                    MythicDungeonWheel:ResetTestClients()
+                                end
+                            </OnClick>
+                        </Scripts>
+                    </Button>
+                    
+                    <Button name="MythicDungeonWheelTestOwnSessionButton" inherits="UIPanelButtonTemplate" text="Start Own Session">
+                        <Size x="150" y="25"/>
+                        <Anchors>
+                            <Anchor point="LEFT" relativeTo="MythicDungeonWheelTestResetAllButton" relativePoint="RIGHT" x="20" y="0"/>
+                        </Anchors>
+                        <Scripts>
+                            <OnClick>
+                                if MythicDungeonWheel then
+                                    MythicDungeonWheel:StartSession()
+                                end
+                            </OnClick>
+                        </Scripts>
+                    </Button>
+                    
+                    <Button name="MythicDungeonWheelTestFriendStartRollButton" inherits="UIPanelButtonTemplate" text="Friend Start Roll">
+                        <Size x="150" y="25"/>
+                        <Anchors>
+                            <Anchor point="TOPLEFT" x="20" y="-65"/>
+                        </Anchors>
+                        <Scripts>
+                            <OnClick>
+                                if MythicDungeonWheel then
+                                    MythicDungeonWheel:SimulateClientStartRoll("TestFriend")
+                                end
+                            </OnClick>
+                        </Scripts>
+                    </Button>
+                    
+                    <Button name="MythicDungeonWheelTestSyncAnimButton" inherits="UIPanelButtonTemplate" text="Test Sync Anim">
+                        <Size x="140" y="25"/>
+                        <Anchors>
+                            <Anchor point="LEFT" relativeTo="MythicDungeonWheelTestFriendStartRollButton" relativePoint="RIGHT" x="10" y="0"/>
+                        </Anchors>
+                        <Scripts>
+                            <OnClick>
+                                if MythicDungeonWheel then
+                                    MythicDungeonWheel:TestOwnerAnimationFlow()
+                                end
+                            </OnClick>
+                        </Scripts>
+                    </Button>
+                    
+                    <Button name="MythicDungeonWheelTestAddClient1Button" inherits="UIPanelButtonTemplate" text="Add Friend1">
+                        <Size x="120" y="25"/>
+                        <Anchors>
+                            <Anchor point="TOPLEFT" x="20" y="-100"/>
+                        </Anchors>
+                        <Scripts>
+                            <OnClick>
+                                if MythicDungeonWheel then
+                                    MythicDungeonWheel:SimulateClientJoin("Friend1")
+                                end
+                            </OnClick>
+                        </Scripts>
+                    </Button>
+                    
+                    <Button name="MythicDungeonWheelTestAddClient2Button" inherits="UIPanelButtonTemplate" text="Add Friend2">
+                        <Size x="120" y="25"/>
+                        <Anchors>
+                            <Anchor point="LEFT" relativeTo="MythicDungeonWheelTestAddClient1Button" relativePoint="RIGHT" x="20" y="0"/>
+                        </Anchors>
+                        <Scripts>
+                            <OnClick>
+                                if MythicDungeonWheel then
+                                    MythicDungeonWheel:SimulateClientJoin("Friend2")
+                                end
+                            </OnClick>
+                        </Scripts>
+                    </Button>
+                    
+                    <Button name="MythicDungeonWheelTestAddClient3Button" inherits="UIPanelButtonTemplate" text="Add Friend3">
+                        <Size x="120" y="25"/>
+                        <Anchors>
+                            <Anchor point="LEFT" relativeTo="MythicDungeonWheelTestAddClient2Button" relativePoint="RIGHT" x="20" y="0"/>
+                        </Anchors>
+                        <Scripts>
+                            <OnClick>
+                                if MythicDungeonWheel then
+                                    MythicDungeonWheel:SimulateClientJoin("Friend3")
+                                end
+                            </OnClick>
+                        </Scripts>
+                    </Button>
+                    
+                    <Button name="MythicDungeonWheelTestRemoveClient1Button" inherits="UIPanelButtonTemplate" text="Remove Friend1">
+                        <Size x="130" y="25"/>
+                        <Anchors>
+                            <Anchor point="LEFT" relativeTo="MythicDungeonWheelTestAddClient3Button" relativePoint="RIGHT" x="20" y="0"/>
+                        </Anchors>
+                        <Scripts>
+                            <OnClick>
+                                if MythicDungeonWheel then
+                                    MythicDungeonWheel:SimulateClientLeave("Friend1")
+                                end
+                            </OnClick>
+                        </Scripts>
+                    </Button>
+                </Frames>
+            </Frame>
+            
+            <!-- Keystone Management Section -->
+            <Frame name="MythicDungeonWheelTestFrameKeystoneSection">
+                <Size x="680" y="120"/>
+                <Anchors>
+                    <Anchor point="TOP" x="0" y="-270"/>
+                </Anchors>
+                <Scripts>
+                    <OnLoad>
+                        -- Section title
+                        self.title = self:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+                        self.title:SetPoint("TOPLEFT", self, "TOPLEFT", 10, -5)
+                        self.title:SetText("Keystone Management")
+                        self.title:SetTextColor(1, 0.8, 0.8, 1)
+                    </OnLoad>
+                </Scripts>
+                <Frames>
+                    <Button name="MythicDungeonWheelTestAddKey1Button" inherits="UIPanelButtonTemplate" text="Friend1 Key">
+                        <Size x="100" y="25"/>
+                        <Anchors>
+                            <Anchor point="TOPLEFT" x="10" y="-25"/>
+                        </Anchors>
+                        <Scripts>
+                            <OnClick>
+                                if MythicDungeonWheel then
+                                    local level = math.random(10, 20)
+                                    local dungeons = {"The Dawnbreaker", "Ara-Kara, City of Echoes", "Priory of the Sacred Flame"}
+                                    local dungeon = dungeons[math.random(#dungeons)]
+                                    MythicDungeonWheel:SimulateClientAddKeystone("Friend1", level, dungeon)
+                                end
+                            </OnClick>
+                        </Scripts>
+                    </Button>
+                    
+                    <Button name="MythicDungeonWheelTestAddKey2Button" inherits="UIPanelButtonTemplate" text="Friend2 Key">
+                        <Size x="100" y="25"/>
+                        <Anchors>
+                            <Anchor point="LEFT" relativeTo="MythicDungeonWheelTestAddKey1Button" relativePoint="RIGHT" x="10" y="0"/>
+                        </Anchors>
+                        <Scripts>
+                            <OnClick>
+                                if MythicDungeonWheel then
+                                    local level = math.random(10, 20)
+                                    local dungeons = {"Operation: Floodgate", "Eco-Dome Al'dani", "Halls of Atonement"}
+                                    local dungeon = dungeons[math.random(#dungeons)]
+                                    MythicDungeonWheel:SimulateClientAddKeystone("Friend2", level, dungeon)
+                                end
+                            </OnClick>
+                        </Scripts>
+                    </Button>
+                    
+                    <Button name="MythicDungeonWheelTestAddKey3Button" inherits="UIPanelButtonTemplate" text="Friend3 Key">
+                        <Size x="100" y="25"/>
+                        <Anchors>
+                            <Anchor point="LEFT" relativeTo="MythicDungeonWheelTestAddKey2Button" relativePoint="RIGHT" x="10" y="0"/>
+                        </Anchors>
+                        <Scripts>
+                            <OnClick>
+                                if MythicDungeonWheel then
+                                    local level = math.random(10, 20)
+                                    local dungeons = {"Tazavesh: Streets of Wonder", "The Necrotic Wake", "Siege of Boralus"}
+                                    local dungeon = dungeons[math.random(#dungeons)]
+                                    MythicDungeonWheel:SimulateClientAddKeystone("Friend3", level, dungeon)
+                                end
+                            </OnClick>
+                        </Scripts>
+                    </Button>
+                    
+                    <Button name="MythicDungeonWheelTestAddOwnerKeyButton" inherits="UIPanelButtonTemplate" text="Owner Key">
+                        <Size x="100" y="25"/>
+                        <Anchors>
+                            <Anchor point="LEFT" relativeTo="MythicDungeonWheelTestAddKey3Button" relativePoint="RIGHT" x="10" y="0"/>
+                        </Anchors>
+                        <Scripts>
+                            <OnClick>
+                                if MythicDungeonWheel then
+                                    local level = math.random(10, 20)
+                                    local dungeons = {"The Stonevault", "Mists of Tirna Scithe", "City of Threads"}
+                                    local dungeon = dungeons[math.random(#dungeons)]
+                                    MythicDungeonWheel:SimulateClientAddKeystone("TestFriend", level, dungeon)
+                                end
+                            </OnClick>
+                        </Scripts>
+                    </Button>
+                    
+                    <Button name="MythicDungeonWheelTestAddYourKeyButton" inherits="UIPanelButtonTemplate" text="Your Test Key">
+                        <Size x="110" y="25"/>
+                        <Anchors>
+                            <Anchor point="LEFT" relativeTo="MythicDungeonWheelTestAddOwnerKeyButton" relativePoint="RIGHT" x="10" y="0"/>
+                        </Anchors>
+                        <Scripts>
+                            <OnClick>
+                                if MythicDungeonWheel then
+                                    MythicDungeonWheel:ToggleTestMode()
+                                    if MythicDungeonWheel.testMode then
+                                        C_Timer.After(0.1, function()
+                                            if MythicDungeonWheel.session.active then
+                                                MythicDungeonWheel:AddPlayerKeystone(1)
+                                            end
+                                        end)
+                                    end
+                                end
+                            </OnClick>
+                        </Scripts>
+                    </Button>
+                </Frames>
+            </Frame>
+            
+            <!-- Voting Controls Section -->
+            <Frame name="MythicDungeonWheelTestFrameVotingSection">
+                <Size x="680" y="80"/>
+                <Anchors>
+                    <Anchor point="TOP" x="0" y="-410"/>
+                </Anchors>
+                <Scripts>
+                    <OnLoad>
+                        -- Section title
+                        self.title = self:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+                        self.title:SetPoint("TOPLEFT", self, "TOPLEFT", 10, -5)
+                        self.title:SetText("Voting Controls")
+                        self.title:SetTextColor(1, 1, 0.8, 1)
+                    </OnLoad>
+                </Scripts>
+                <Frames>
+                    <Button name="MythicDungeonWheelTestAutoVoteToggleButton" inherits="UIPanelButtonTemplate" text="Auto Vote: OFF">
+                        <Size x="120" y="25"/>
+                        <Anchors>
+                            <Anchor point="TOPLEFT" x="10" y="-25"/>
+                        </Anchors>
+                        <Scripts>
+                            <OnClick>
+                                if MythicDungeonWheel then
+                                    MythicDungeonWheel.testClients.autoVote = not MythicDungeonWheel.testClients.autoVote
+                                    if MythicDungeonWheel.testClients.autoVote then
+                                        self:SetText("Auto Vote: ON")
+                                    else
+                                        self:SetText("Auto Vote: OFF")
+                                    end
+                                end
+                            </OnClick>
+                        </Scripts>
+                    </Button>
+                    
+                    <Button name="MythicDungeonWheelTestVote1YesButton" inherits="UIPanelButtonTemplate" text="Friend1 Yes">
+                        <Size x="100" y="25"/>
+                        <Anchors>
+                            <Anchor point="LEFT" relativeTo="MythicDungeonWheelTestAutoVoteToggleButton" relativePoint="RIGHT" x="10" y="0"/>
+                        </Anchors>
+                        <Scripts>
+                            <OnClick>
+                                if MythicDungeonWheel then
+                                    MythicDungeonWheel:SimulateClientVote("Friend1", true)
+                                end
+                            </OnClick>
+                        </Scripts>
+                    </Button>
+                    
+                    <Button name="MythicDungeonWheelTestVote2NoButton" inherits="UIPanelButtonTemplate" text="Friend2 No">
+                        <Size x="100" y="25"/>
+                        <Anchors>
+                            <Anchor point="LEFT" relativeTo="MythicDungeonWheelTestVote1YesButton" relativePoint="RIGHT" x="10" y="0"/>
+                        </Anchors>
+                        <Scripts>
+                            <OnClick>
+                                if MythicDungeonWheel then
+                                    MythicDungeonWheel:SimulateClientVote("Friend2", false)
+                                end
+                            </OnClick>
+                        </Scripts>
+                    </Button>
+                    
+                    <Button name="MythicDungeonWheelTestVote3YesButton" inherits="UIPanelButtonTemplate" text="Friend3 Yes">
+                        <Size x="100" y="25"/>
+                        <Anchors>
+                            <Anchor point="LEFT" relativeTo="MythicDungeonWheelTestVote2NoButton" relativePoint="RIGHT" x="10" y="0"/>
+                        </Anchors>
+                        <Scripts>
+                            <OnClick>
+                                if MythicDungeonWheel then
+                                    MythicDungeonWheel:SimulateClientVote("Friend3", true)
+                                end
+                            </OnClick>
+                        </Scripts>
+                    </Button>
+                    
+                    <Button name="MythicDungeonWheelTestVoteOwnerButton" inherits="UIPanelButtonTemplate" text="Owner Yes">
+                        <Size x="100" y="25"/>
+                        <Anchors>
+                            <Anchor point="LEFT" relativeTo="MythicDungeonWheelTestVote3YesButton" relativePoint="RIGHT" x="10" y="0"/>
+                        </Anchors>
+                        <Scripts>
+                            <OnClick>
+                                if MythicDungeonWheel then
+                                    MythicDungeonWheel:SimulateClientVote("TestFriend", true)
+                                end
+                            </OnClick>
+                        </Scripts>
+                    </Button>
+                </Frames>
+            </Frame>
+        </Frames>
+    </Frame>
+
 </Ui>
