@@ -1,4 +1,4 @@
--- MythicDungeonWheel.lua
+ -- MythicDungeonWheel.lua
 -- Main addon file for Mythic Dungeon Wheel
 
 local addonName, addon = ...
@@ -6,6 +6,19 @@ local addonName, addon = ...
 -- Initialize addon without LibStub dependencies for simplicity
 MythicDungeonWheel = CreateFrame("Frame")
 local MDW = MythicDungeonWheel
+
+-- Debug print helper function
+function MDW:DebugPrint(message)
+    if self.debugMode then
+        print(message)
+    end
+end
+
+-- Initialize scrolling animation state
+MDW.scrollingAnimation = {
+    isAnimating = false,
+    selectedKeystone = nil
+}
 
 -- Constants
 local COMM_PREFIX = "MDW"
@@ -22,19 +35,6 @@ end
 if not string.trim then
     string.trim = trim
 end
-
--- Debug print helper function
-function MDW:DebugPrint(message)
-    if self.debugMode then
-        print(message)
-    end
-end
-
--- Initialize scrolling animation state
-MDW.scrollingAnimation = {
-    isAnimating = false,
-    selectedKeystone = nil
-}
 
 -- Session data
 MDW.session = {
@@ -853,7 +853,7 @@ function MDW:GetPlayerKeystones()
     if self.debugMode and #keystones == 0 then
         self:DebugPrint("|cffffff00No keystones found in bags, using debug keystone.|r")
         return {
-            {level = 20, dungeon = "Debug Dungeon", isTest = true}
+            {level = 69, dungeon = "Goon Cave", isTest = true}
         }
     end
     
